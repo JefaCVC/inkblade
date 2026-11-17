@@ -2,7 +2,9 @@
 
 Draw a kanji and its magic answers. Seven bosses hold seven scrolls.
 
-![make.fun](https://make.fun/badge.svg)
+[![make.fun · best-game-01](https://make.fun/badge/best-game-01.svg)](https://make.fun/bounty/best-game-01?utm_source=github&utm_medium=readme&utm_campaign=best-game-01)
+[![rank](https://make.fun/badge/best-game-01/jefaprayoga-stack/inkblade/rank.svg)](https://make.fun/bounty/best-game-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-game-01)
+[![reward](https://make.fun/badge/best-game-01/jefaprayoga-stack/inkblade/reward.svg)](https://make.fun/bounty/best-game-01?utm_source=github&utm_medium=readme&utm_campaign=best-game-01)
 
 A complete original browser game for the [make.fun "Make the best game" bounty](https://make.fun/bounty/best-game-01). You are an ink painter, and your brush is your weapon against seven elemental bosses. Draw 火 in the ink pad and fire erupts; draw 水 and water bursts out. Every kanji is a spell, and every stroke is judged.
 
