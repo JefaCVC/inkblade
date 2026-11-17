@@ -150,13 +150,13 @@ export function drawMenu(ctx, g, time) {
   ctx.font = '700 13px Georgia, serif';
   ctx.textAlign = 'left';
   ctx.fillStyle = '#ffd43b';
-  ctx.fillText('🎯 GOAL — seal all 7 scrolls', 32, 75);
+  ctx.fillText('🎯 GOAL: seal all 7 scrolls', 32, 75);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#69db7c';
-  ctx.fillText('✓ WIN — seal the boss', 512, 75);
+  ctx.fillText('✓ WIN: seal the boss', 512, 75);
   ctx.textAlign = 'right';
   ctx.fillStyle = '#ff8787';
-  ctx.fillText('✗ LOSE — HP reaches 0', 992, 75);
+  ctx.fillText('✗ LOSE: HP reaches 0', 992, 75);
   // Title (compact: the dashboard needs the room).
   ctx.textAlign = 'center';
   ctx.fillStyle = '#2b2118';
@@ -314,7 +314,7 @@ export function drawMenu(ctx, g, time) {
     }
     registerButton(g, `diff-${d.id}`, x, y, 162, 56);
   });
-  drawButton(ctx, g, 'play', 560, 352, 444, 56, g.runStarted ? '▶  PLAY — CONTINUE' : '▶  PLAY — NEW STORY', { fill: '#b02a1e', font: '700 20px Georgia, serif' });
+  drawButton(ctx, g, 'play', 560, 352, 444, 56, g.runStarted ? '▶  PLAY: CONTINUE' : '▶  PLAY: NEW STORY', { fill: '#b02a1e', font: '700 20px Georgia, serif' });
   // Content chips + discovered combos as ink seals.
   const chips = [
     '8 ELEMENTS', '7 BOSSES', '6 COMBOS', '17 RANKS', `FEATS ${feats.length}/${FEATS.length}`,
@@ -358,7 +358,7 @@ export function drawMenu(ctx, g, time) {
   ctx.font = '700 13px Georgia, serif';
   ctx.textAlign = 'center';
   ctx.fillText(
-    `Last run — Best ${progress.bestScore} · Furthest Scroll ${progress.furthestScroll || '—'} · Last grade ${progress.lastGrade || '—'}   ·   Next: ${nextBoss ? `Scroll ${nextBoss.scroll} — ${nextBoss.name} (${ELEMENT_BY_ID[nextBoss.element].kanji})` : 'all scrolls sealed — try Grand Master!'}`,
+    `Last run: best ${progress.bestScore} · furthest scroll ${progress.furthestScroll || 0} · last grade ${progress.lastGrade || 'none'}   ·   Next: ${nextBoss ? `Scroll ${nextBoss.scroll}, ${nextBoss.name} (${ELEMENT_BY_ID[nextBoss.element].kanji})` : 'all scrolls sealed. Try Grand Master!'}`,
     512, 462,
   );
   // Secondary buttons: one row of eight.
@@ -378,7 +378,7 @@ export function drawMenu(ctx, g, time) {
   ctx.font = '700 12px Georgia, serif';
   ctx.textAlign = 'center';
   ctx.fillText(
-    `Best score ${progress.bestScore}  ·  Scrolls unlocked ${progress.unlockedScroll}/7  ·  Campaigns sealed ${progress.campaignWins}  ·  M mute · P pause · WASD move · 1–8 pick element`,
+    `Best score ${progress.bestScore}  ·  Scrolls unlocked ${progress.unlockedScroll}/7  ·  Campaigns sealed ${progress.campaignWins}  ·  M mute · P pause · WASD move · 1-8 pick element`,
     512, 541,
   );
   drawRankChip(ctx, g);
@@ -447,7 +447,7 @@ export function drawHelp(ctx, g) {
   const lines = [
     '1. DRAW in the ink pad: every kanji is a spell. Draw 火 and fire erupts;',
     '    draw 水 and water bursts out. The ghost strokes show you the shape.',
-    '2. CAST with Space, the CAST button, or just pause — the brush casts for you.',
+    '2. CAST with Space, the CAST button, or just pause. The brush casts for you.',
     '    A clean stroke (90%+) is a PERFECT cast: critical damage + bonus ink.',
     '3. ELEMENTS beat each other: 水 beats 火, 火 beats 風, 風 beats 雷, 雷 beats 水,',
     '    土 beats 雷, 氷 beats 風 and 土, 光 and 闇 oppose. Weak hits deal double.',
@@ -459,7 +459,7 @@ export function drawHelp(ctx, g) {
   lines.forEach((line, i) => ctx.fillText(line, 190, 150 + i * 26));
   ctx.font = '700 15px Georgia, serif';
   ctx.fillStyle = '#b02a1e';
-  ctx.fillText('Keys: 1–8 pick element · Space cast · C clear · P pause · M mute', 190, 352);
+  ctx.fillText('Keys: 1-8 pick element · Space cast · C clear · P pause · M mute', 190, 352);
   ctx.fillText('Bosses are drawn in ink; their weakness is shown on their health bar.', 190, 378);
   drawButton(ctx, g, 'help-close', 412, 420, 200, 40, 'GOT IT', { fill: '#b02a1e' });
 }
@@ -543,7 +543,7 @@ function drawNextScrollPanel(ctx, g, x, y, w, h) {
   ctx.fillStyle = isFinal ? '#ffd43b' : '#f6efdd';
   ctx.font = '700 13px Georgia, serif';
   ctx.textAlign = 'left';
-  ctx.fillText(isFinal ? `FINAL SCROLL — ${boss.name}, the dragon awaits` : `NEXT: Scroll ${boss.scroll} — ${boss.name}`, x + 12, y + 18);
+  ctx.fillText(isFinal ? `FINAL SCROLL: ${boss.name}` : `NEXT: Scroll ${boss.scroll}, ${boss.name}`, x + 12, y + 18);
   ctx.fillStyle = '#d9c9a8';
   ctx.font = '12px Georgia, serif';
   ctx.fillText(`${el.kanji} ${el.name} · Weak: ${weak.kanji} ${weak.name} · HP ${Math.round(boss.hp * diff.bossHpMul)}`, x + 12, y + 36);
@@ -562,7 +562,7 @@ export function drawShop(ctx, g) {
   ctx.fillText(`Essence: ${run.essence}`, 34, 122);
   ctx.font = 'italic 13px Georgia, serif';
   ctx.fillStyle = '#6b5a44';
-  ctx.fillText('Essence is earned by sealing scrolls — more for accuracy and long combos.', 34, 142);
+  ctx.fillText('Essence is earned by sealing scrolls. Accuracy and long combos earn more.', 34, 142);
   UPGRADES.forEach((u, i) => {
     const col = i % 3;
     const row = Math.floor(i / 3);
@@ -599,7 +599,7 @@ export function drawShop(ctx, g) {
 
 // --- Blessing draft: pick 1 of 3 free cards between scrolls. ---
 export function drawDraft(ctx, g) {
-  drawHeader(ctx, 'CHOOSE A BLESSING — PICK 1 OF 3', 'Free. The blessing lasts for the rest of this campaign.');
+  drawHeader(ctx, 'CHOOSE A BLESSING: PICK 1 OF 3', 'Free. The blessing lasts for the rest of this campaign.');
   const { run, draft } = g;
   if (!draft) {
     ctx.fillStyle = '#2b2118';
@@ -646,7 +646,7 @@ export function drawDraft(ctx, g) {
     drawButton(ctx, g, `draft-pick-${i}`, x + 60, y + 222, 180, 34, 'PICK', { fill: rare ? '#b58900' : '#b02a1e', font: '700 15px Georgia, serif' });
   });
   const canReroll = run.essence >= cost;
-  drawButton(ctx, g, 'draft-reroll', 362, 440, 300, 44, `REROLL — ${cost} essence`, {
+  drawButton(ctx, g, 'draft-reroll', 362, 440, 300, 44, `REROLL: ${cost} essence`, {
     fill: canReroll ? '#2b2118' : '#868e96', font: '700 16px Georgia, serif', disabled: !canReroll,
   });
   ctx.fillStyle = '#6b5a44';
@@ -654,8 +654,8 @@ export function drawDraft(ctx, g) {
   ctx.textAlign = 'center';
   ctx.fillText(
     draft.rerolls > 0
-      ? `Rerolled ${draft.rerolls} time${draft.rerolls > 1 ? 's' : ''} — the next reroll costs ${20 * (draft.rerolls + 2)} essence.`
-      : 'Not feeling these three? Reroll for a fresh hand — the price rises each time.',
+      ? `Rerolled ${draft.rerolls} time${draft.rerolls > 1 ? 's' : ''}. The next reroll costs ${20 * (draft.rerolls + 2)} essence.`
+      : 'Not feeling these three? Reroll for a fresh hand. The price rises each time.',
     512, 512,
   );
 }
@@ -667,7 +667,7 @@ export function drawRoads(ctx, g) {
   const el = ELEMENT_BY_ID[boss.element];
   const weak = ELEMENT_BY_ID[boss.weakness];
   const diff = DIFFICULTY_BY_ID[g.run.difficulty] ?? DIFFICULTY_BY_ID.calligrapher;
-  drawHeader(ctx, `THE ROAD TO SCROLL ${boss.scroll} — ${boss.name}`, boss.title);
+  drawHeader(ctx, `THE ROAD TO SCROLL ${boss.scroll}: ${boss.name}`, boss.title);
   // The boss waiting at the end of the road.
   ctx.fillStyle = 'rgba(43, 33, 24, 0.88)';
   ctx.beginPath();
@@ -679,7 +679,7 @@ export function drawRoads(ctx, g) {
   ctx.fillText(el.kanji, 48, 136);
   ctx.fillStyle = '#f6efdd';
   ctx.font = '700 16px Georgia, serif';
-  ctx.fillText(`${boss.name} — ${el.name} · Weak: ${weak.kanji} ${weak.name} · HP ${Math.round(boss.hp * diff.bossHpMul)}`, 92, 122);
+  ctx.fillText(`${boss.name}, ${el.name} · Weak: ${weak.kanji} ${weak.name} · HP ${Math.round(boss.hp * diff.bossHpMul)}`, 92, 122);
   ctx.fillStyle = '#d9c9a8';
   ctx.font = 'italic 13px Georgia, serif';
   ctx.fillText(boss.tip, 92, 142);
@@ -701,15 +701,15 @@ export function drawRoads(ctx, g) {
     ctx.fillText(road.name, x + 236, y + 140);
     ctx.fillStyle = '#c1271b';
     ctx.font = '700 15px Georgia, serif';
-    ctx.fillText(`RISK — ${road.risk}`, x + 236, y + 176);
+    ctx.fillText(`RISK: ${road.risk}`, x + 236, y + 176);
     ctx.fillStyle = '#2b8a3e';
-    ctx.fillText(`REWARD — ${road.reward}`, x + 236, y + 202);
+    ctx.fillText(`REWARD: ${road.reward}`, x + 236, y + 202);
     drawButton(ctx, g, `road-${road.id}`, x + 136, y + 222, 200, 34, 'TAKE THIS ROAD', { fill: '#b02a1e', font: '700 14px Georgia, serif' });
   });
   ctx.fillStyle = '#6b5a44';
   ctx.font = 'italic 13px Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.fillText('The road changes the fight ahead — not the scroll. Choose wisely.', 512, 470);
+  ctx.fillText('The road changes the fight ahead. The next scroll stays the same.', 512, 470);
 }
 
 // --- Dojo: practice drawing each kanji with guides and accuracy feedback. ---
@@ -736,7 +736,7 @@ export function drawDojo(ctx, g, time) {
     ctx.fillText(e.kanji, 44, y + 31);
     ctx.fillStyle = selected ? '#fdf6e3' : '#2b2118';
     ctx.font = '700 15px Georgia, serif';
-    ctx.fillText(`${e.name} — ${e.cost} ink`, 82, y + 27);
+    ctx.fillText(`${e.name}: ${e.cost} ink`, 82, y + 27);
     registerButton(g, `dojo-${e.id}`, 30, y, 300, 44);
   });
   // Practice pad.
@@ -819,7 +819,7 @@ export function drawDojo(ctx, g, time) {
   ctx.fillStyle = '#6b5a44';
   ctx.font = 'italic 13px Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.fillText('Draw in the pad, then JUDGE IT — or just pause and the brush judges itself.', 512, 492);
+  ctx.fillText('Draw in the pad, then JUDGE IT. Or just pause and the brush judges itself.', 512, 492);
   drawBackButton(ctx, g);
 }
 
@@ -866,7 +866,7 @@ export function dojoJudge(g) {
   if (result.element) {
     d.feedback = {
       accuracy: result.accuracy,
-      text: `${result.element.kanji} ${result.element.name} — ${acc}%${result.accuracy >= 0.9 ? ' PERFECT!' : ''}`,
+      text: `${result.element.kanji} ${result.element.name}: ${acc}%${result.accuracy >= 0.9 ? ' PERFECT!' : ''}`,
     };
     playElementImpact(result.element.id);
     const el = ELEMENT_BY_ID[d.selected];
@@ -874,7 +874,7 @@ export function dojoJudge(g) {
       d.feedback.text += ` (you drew ${result.element.name}, not ${el.name})`;
     }
   } else {
-    d.feedback = { accuracy: result.accuracy, text: `Unclear — ${acc}%. Follow the ghost.` };
+    d.feedback = { accuracy: result.accuracy, text: `Unclear at ${acc}%. Follow the ghost.` };
   }
 }
 
@@ -949,7 +949,7 @@ export function drawCodex(ctx, g, time) {
 
 // --- Leaderboard: top 10 runs. ---
 export function drawLeaderboard(ctx, g) {
-  drawHeader(ctx, 'LEADERBOARD', 'The ten finest brushes, kept on this machine.');
+  drawHeader(ctx, 'LEADERBOARD', 'Your ten best runs, kept on this machine.');
   const rows = g.leaderboard;
   ctx.fillStyle = '#fdf6e3';
   ctx.beginPath();
@@ -976,7 +976,7 @@ export function drawLeaderboard(ctx, g) {
     ctx.font = 'italic 16px Georgia, serif';
     ctx.fillStyle = '#6b5a44';
     ctx.textAlign = 'center';
-    ctx.fillText('No runs yet. The first brushstroke is yours.', 512, 300);
+    ctx.fillText('No runs yet. Your first campaign will appear here.', 512, 300);
   }
   rows.forEach((row, i) => {
     const y = 172 + i * 32;
@@ -987,8 +987,8 @@ export function drawLeaderboard(ctx, g) {
     ctx.fillText(String(row.score), 280, y);
     ctx.fillText(`${row.scrolls}/7`, 400, y);
     ctx.fillText(`${Math.round((row.accuracy ?? 0) * 100)}%`, 510, y);
-    ctx.fillText(row.date ?? '—', 650, y);
-    ctx.fillText(row.result ?? '—', 750, y);
+    ctx.fillText(row.date ?? 'n/a', 650, y);
+    ctx.fillText(row.result ?? 'n/a', 750, y);
   });
   drawBackButton(ctx, g);
 }
@@ -1022,18 +1022,18 @@ export function drawHistory(ctx, g) {
     ctx.font = 'italic 16px Georgia, serif';
     ctx.fillStyle = '#6b5a44';
     ctx.textAlign = 'center';
-    ctx.fillText('No runs yet. Every master was once a first stroke.', 512, 300);
+    ctx.fillText('No runs yet. Nothing to show until you play a campaign.', 512, 300);
   }
   rows.slice(0, 12).forEach((row, i) => {
     const y = 170 + i * 28;
     ctx.font = '14px Georgia, serif';
     ctx.fillStyle = '#2b2118';
     ctx.textAlign = 'left';
-    ctx.fillText(row.date ?? '—', 190, y);
+    ctx.fillText(row.date ?? 'n/a', 190, y);
     ctx.fillText(`Scroll ${row.scroll}`, 300, y);
-    ctx.fillText(row.boss ?? '—', 400, y);
+    ctx.fillText(row.boss ?? 'n/a', 400, y);
     ctx.fillStyle = row.result === 'Sealed' ? '#2b8a3e' : '#c1271b';
-    ctx.fillText(row.result ?? '—', 560, y);
+    ctx.fillText(row.result ?? 'n/a', 560, y);
     ctx.fillStyle = '#2b2118';
     ctx.fillText(String(row.score), 660, y);
     ctx.fillText(formatTime(row.seconds ?? 0), 750, y);
@@ -1057,7 +1057,7 @@ export function drawVictory(ctx, g, time) {
   const boss = BOSSES[v.scrollIndex];
   const el = ELEMENT_BY_ID[boss.element];
   const diff = DIFFICULTY_BY_ID[g.run.difficulty] ?? DIFFICULTY_BY_ID.calligrapher;
-  drawHeader(ctx, `SCROLL ${boss.scroll} SEALED`, `${boss.name} — ${boss.title} · ${diff.name}`);
+  drawHeader(ctx, `SCROLL ${boss.scroll} SEALED`, `${boss.name}, ${boss.title} · ${diff.name}`);
   // The scroll itself.
   ctx.fillStyle = '#fdf6e3';
   ctx.beginPath();
@@ -1081,7 +1081,7 @@ export function drawVictory(ctx, g, time) {
   ctx.font = '15px Georgia, serif';
   ctx.fillText('The scroll is sealed in red. The story moves on.', 342, 330);
   // The fight grade: a big coloured seal at the scroll's top-left corner.
-  const grade = v.grade || '—';
+  const grade = v.grade || '?';
   const gradeColors = { S: '#e67700', A: '#2b8a3e', B: '#1971c2', C: '#868e96' };
   ctx.fillStyle = gradeColors[grade] || '#868e96';
   ctx.beginPath();
@@ -1099,7 +1099,7 @@ export function drawVictory(ctx, g, time) {
   if (v.campaignComplete) {
     ctx.fillStyle = '#b02a1e';
     ctx.font = '700 20px Georgia, serif';
-    ctx.fillText('🏆 THE STORY IS COMPLETE — all seven scrolls sealed!', 342, 366);
+    ctx.fillText('🏆 THE STORY IS COMPLETE: all seven scrolls sealed!', 342, 366);
   }
   // Rank: a rank-up celebration with the new seal, or the current rank line.
   // (awardRankPoints returns the new rank object itself, or null.)
@@ -1130,7 +1130,7 @@ export function drawVictory(ctx, g, time) {
     const next = pointsToNextRank(g.progress.rankPoints);
     ctx.fillText(
       next === null
-        ? `Rank: ${rank.name} — the highest rank of all`
+        ? `Rank: ${rank.name}, the highest rank of all`
         : `Rank: ${rank.name} · ${g.progress.rankPoints} pts · ${next} to ${RANKS[idx + 1].name}`,
       342, 402,
     );
@@ -1154,7 +1154,7 @@ export function drawVictory(ctx, g, time) {
     ['Essence earned', `+${v.essence}`],
     ['Score', String(v.score)],
     ['Rank points', `+${v.rankPoints || 0}`],
-    ['Grade', v.grade || '—'],
+    ['Grade', v.grade || '?'],
   ];
   ctx.font = '15px Georgia, serif';
   stats.forEach(([label, value], i) => {
@@ -1205,7 +1205,7 @@ function drawCampaignVictory(ctx, g, time) {
   const scores = g.run.scrollScores ?? [];
   const campGrade = campaignGrade(grades);
   const gradeColors = { S: '#e67700', A: '#2b8a3e', B: '#1971c2', C: '#868e96' };
-  drawHeader(ctx, 'THE STORY IS COMPLETE', 'All seven scrolls sealed — the dragon is bound in ink.');
+  drawHeader(ctx, 'THE STORY IS COMPLETE', 'All seven scrolls sealed. The dragon is bound in ink.');
   // Left panel: the big grade, the totals, the rank-up, the next goal.
   ctx.fillStyle = '#fdf6e3';
   ctx.beginPath();
@@ -1248,10 +1248,10 @@ function drawCampaignVictory(ctx, g, time) {
     ctx.fillText(`★ RANK UP! You are now ${v.rankUp.name}`, 210, 318);
   }
   const nextGoal = g.run.difficulty !== 'master'
-    ? 'NEXT GOAL — seal all 7 scrolls on Grand Master'
+    ? 'NEXT GOAL: seal all 7 scrolls on Grand Master'
     : (g.feats.length < FEATS.length
-      ? `NEXT GOAL — earn all ${FEATS.length} feats (${g.feats.length}/${FEATS.length})`
-      : 'NEXT GOAL — you are a Grand Calligrapher. The story is yours.');
+      ? `NEXT GOAL: earn all ${FEATS.length} feats (${g.feats.length}/${FEATS.length})`
+      : 'NEXT GOAL: none left. You finished everything.');
   ctx.fillStyle = '#b02a1e';
   ctx.font = '700 14px Georgia, serif';
   ctx.fillText(nextGoal, 210, 396);
@@ -1267,12 +1267,12 @@ function drawCampaignVictory(ctx, g, time) {
   BOSSES.forEach((boss, i) => {
     const x = 440 + i * 80;
     const el = ELEMENT_BY_ID[boss.element];
-    const grade = grades[i] || '–';
+    const grade = grades[i] || '?';
     ctx.fillStyle = el.color;
     ctx.font = '700 26px "Noto Serif JP", serif';
     ctx.textAlign = 'center';
     ctx.fillText(el.kanji, x + 32, 164);
-    ctx.fillStyle = grade === '–' ? '#868e96' : (gradeColors[grade] || '#868e96');
+    ctx.fillStyle = grade === '?' ? '#868e96' : (gradeColors[grade] || '#868e96');
     ctx.beginPath();
     ctx.arc(x + 32, 192, 15, 0, Math.PI * 2);
     ctx.fill();
@@ -1316,7 +1316,7 @@ function drawCampaignVictory(ctx, g, time) {
   if (earned.length === 0) {
     ctx.fillStyle = '#d9c9a8';
     ctx.font = 'italic 12px Georgia, serif';
-    ctx.fillText('No new feats this run — the deeds are waiting.', 36, 470);
+    ctx.fillText('No new feats this run. The deeds are still waiting.', 36, 470);
   } else {
     let fx = 36;
     ctx.font = '700 12px Georgia, serif';
@@ -1338,7 +1338,7 @@ function drawCampaignVictory(ctx, g, time) {
       ctx.fillText(`+${earned.length - 5} more`, fx, 472);
     }
   }
-  drawButton(ctx, g, 'play-again', 192, 496, 300, 44, 'PLAY AGAIN — NEW STORY', { fill: '#b02a1e', font: '700 16px Georgia, serif' });
+  drawButton(ctx, g, 'play-again', 192, 496, 300, 44, 'PLAY AGAIN: NEW STORY', { fill: '#b02a1e', font: '700 16px Georgia, serif' });
   drawButton(ctx, g, 'menu', 532, 496, 300, 44, 'MENU', { fill: '#6b5a44', font: '700 16px Georgia, serif' });
 }
 
@@ -1347,7 +1347,7 @@ export function drawDefeat(ctx, g) {
   const v = g.lastResult;
   const boss = BOSSES[v.scrollIndex];
   const el = ELEMENT_BY_ID[boss.element];
-  drawHeader(ctx, 'THE INK RUNS DRY', `${boss.name} keeps its scroll — for now.`);
+  drawHeader(ctx, 'THE INK RUNS DRY', `${boss.name} keeps its scroll. You can retry right away.`);
   ctx.fillStyle = '#fdf6e3';
   ctx.beginPath();
   ctx.roundRect(162, 104, 700, 300, 12);
@@ -1364,7 +1364,7 @@ export function drawDefeat(ctx, g) {
   ctx.fillText(boss.name, 512, 240);
   ctx.font = 'italic 15px Georgia, serif';
   ctx.fillStyle = '#6b5a44';
-  ctx.fillText(`Weak against ${ELEMENT_BY_ID[boss.weakness].kanji} ${ELEMENT_BY_ID[boss.weakness].name} — draw it next time.`, 512, 270);
+  ctx.fillText(`Weak against ${ELEMENT_BY_ID[boss.weakness].kanji} ${ELEMENT_BY_ID[boss.weakness].name}. Draw it next time.`, 512, 270);
   ctx.font = '15px Georgia, serif';
   ctx.fillStyle = '#2b2118';
   ctx.fillText(
@@ -1373,7 +1373,7 @@ export function drawDefeat(ctx, g) {
   );
   ctx.font = 'italic 15px Georgia, serif';
   ctx.fillStyle = '#6b5a44';
-  ctx.fillText('Every scroll can be rewritten. The dojo is open whenever you need it.', 512, 344);
+  ctx.fillText('You can retry right away, or train in the dojo first.', 512, 344);
   drawButton(ctx, g, 'retry', 312, 428, 180, 46, '↻  RETRY SCROLL', { fill: '#b02a1e', font: '700 17px Georgia, serif' });
   drawButton(ctx, g, 'dojo', 512, 428, 180, 46, 'TRAIN IN DOJO', { fill: '#2b2118', font: '700 17px Georgia, serif' });
   drawBackButton(ctx, g);
@@ -1396,7 +1396,7 @@ export function drawPause(ctx, g) {
   ctx.fillText('PAUSED', 512, 222);
   ctx.font = 'italic 14px Georgia, serif';
   ctx.fillStyle = '#6b5a44';
-  ctx.fillText('The brush rests. The ink waits.', 512, 248);
+  ctx.fillText('The brush rests while the ink waits.', 512, 248);
   drawButton(ctx, g, 'resume', 372, 272, 280, 42, 'RESUME  (P)', { fill: '#b02a1e' });
   drawButton(ctx, g, 'menu', 372, 324, 280, 42, 'ABANDON TO MENU', { fill: '#6b5a44' });
 }
@@ -1410,7 +1410,7 @@ export function drawCombos(ctx, g) {
   ctx.textAlign = 'left';
   ctx.fillStyle = '#2b2118';
   ctx.font = '700 15px Georgia, serif';
-  ctx.fillText(`Fusion window: ${windowSeconds} seconds after the first cast. Combos cost more ink — and hit much harder.`, 34, 108);
+  ctx.fillText(`Fusion window: ${windowSeconds} seconds after the first cast. Combos cost more ink, and hit much harder.`, 34, 108);
   ctx.font = 'italic 13px Georgia, serif';
   ctx.fillStyle = '#6b5a44';
   ctx.fillText(`${discovered.size} of ${COMBOS.length} combos discovered. Pairs work in either order.`, 34, 128);
@@ -1552,7 +1552,7 @@ export function drawRank(ctx, g, time) {
       ctx.fillStyle = '#6b5a44';
       ctx.font = 'italic 11px Georgia, serif';
       ctx.textAlign = 'right';
-      ctx.fillText('where every brush begins', x + 300, y + 22);
+      ctx.fillText('no unlock', x + 300, y + 22);
       ctx.textAlign = 'left';
     }
   });
@@ -1578,8 +1578,8 @@ export function resetTutorial(g) {
 
 function drawTutorialTabs(ctx, g) {
   const tabs = [
-    { id: 'tut-lesson', label: 'LESSON — TRY IT', page: 'lesson' },
-    { id: 'tut-guide', label: 'GUIDE — HOW IT WORKS', page: 'guide' },
+    { id: 'tut-lesson', label: 'LESSON: TRY IT', page: 'lesson' },
+    { id: 'tut-guide', label: 'GUIDE: HOW IT WORKS', page: 'guide' },
     { id: 'tut-spells', label: 'SPELLS & COMBOS', page: 'spells' },
   ];
   tabs.forEach((tab, i) => {
@@ -1626,10 +1626,10 @@ function drawTutorialLesson(ctx, g, time) {
   const t = g.tutorial;
   const windowSeconds = fusionWindowForRank(rankIndexFromPoints(g.progress.rankPoints));
   const stepText = t.completed
-    ? 'Lesson complete! You cast fire, then fused it into Firestorm. The scrolls await.'
+    ? 'Lesson complete! You cast fire, then fused it into Firestorm.'
     : t.step === 0
-      ? 'Step 1: draw 火 (fire) in the ink pad — follow the numbered ghost strokes, then pause to cast.'
-      : `Step 2: draw 風 (wind) within ${windowSeconds} seconds — fire + wind fuses into FIRESTORM!`;
+      ? 'Step 1: draw 火 (fire) in the ink pad. Follow the numbered ghost strokes, then pause to cast.'
+      : `Step 2: draw 風 (wind) within ${windowSeconds} seconds. Fire + wind fuses into FIRESTORM!`;
   ctx.fillStyle = 'rgba(43, 33, 24, 0.92)';
   ctx.beginPath();
   ctx.roundRect(30, 128, 944, 38, 10);
@@ -1783,9 +1783,9 @@ function drawTutorialLesson(ctx, g, time) {
 function drawTutorialGuide(ctx, g, time) {
   // Card 1: drawing, with an animated example stroke.
   const cards = [
-    { x: 30, title: '1. DRAW THE KANJI', body: 'Press and drag inside the ink pad. Numbered ghost strokes show the shape and order — trace them with your mouse.' },
+    { x: 30, title: '1. DRAW THE KANJI', body: 'Press and drag inside the ink pad. Numbered ghost strokes show the shape and order. Trace them with your mouse.' },
     { x: 362, title: '2. ACCURACY MATTERS', body: 'Every cast is scored. Clean strokes hit harder; 90% or better is PERFECT: critical damage and bonus ink.' },
-    { x: 694, title: '3. MIND YOUR INK', body: 'Every cast costs ink. It refills over time and when spells land. Big spells — and combos — cost more.' },
+    { x: 694, title: '3. MIND YOUR INK', body: 'Every cast costs ink. It refills over time and when spells land. Big spells and combos cost more.' },
   ];
   cards.forEach((card, i) => {
     const w = i === 2 ? 280 : 300;
@@ -1855,7 +1855,7 @@ function drawTutorialGuide(ctx, g, time) {
   ctx.fillStyle = '#2b8a3e';
   ctx.font = '700 16px Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.fillText('92% — PERFECT!', 512, 246);
+  ctx.fillText('92%: PERFECT!', 512, 246);
   ctx.fillStyle = '#6b5a44';
   ctx.font = '12px Georgia, serif';
   ctx.textAlign = 'left';
@@ -1940,11 +1940,11 @@ function drawTutorialGuide(ctx, g, time) {
   ctx.fillStyle = '#2b2118';
   ctx.font = '13px Georgia, serif';
   const controls = [
-    'Mouse — draw in the ink pad',
-    'WASD / arrows — move, dodge',
-    '1–8 — pick an element',
-    'Space — cast now · C — clear',
-    'P — pause · M — mute',
+    'Mouse: draw in the ink pad',
+    'WASD / arrows: move, dodge',
+    '1-8: pick an element',
+    'Space: cast now · C: clear',
+    'P: pause · M: mute',
   ];
   controls.forEach((line, i) => ctx.fillText(line, 710, 360 + i * 22));
   drawBackButton(ctx, g);
@@ -1954,7 +1954,7 @@ function drawTutorialSpells(ctx, g) {
   ctx.fillStyle = '#2b2118';
   ctx.font = '700 15px Georgia, serif';
   ctx.textAlign = 'left';
-  ctx.fillText('THE EIGHT SPELLS — draw the kanji to cast', 34, 112);
+  ctx.fillText('THE EIGHT SPELLS: draw the kanji to cast', 34, 112);
   ELEMENTS.forEach((e, i) => {
     const col = i % 4;
     const row = Math.floor(i / 4);
@@ -1981,7 +1981,7 @@ function drawTutorialSpells(ctx, g) {
   });
   ctx.fillStyle = '#2b2118';
   ctx.font = '700 15px Georgia, serif';
-  ctx.fillText('THE SIX FUSIONS — cast the pair within the fusion window', 34, 306);
+  ctx.fillText('THE SIX FUSIONS: cast the pair within the fusion window', 34, 306);
   COMBOS.forEach((combo, i) => {
     const col = i % 3;
     const row = Math.floor(i / 3);
@@ -2023,7 +2023,7 @@ function drawTutorialSpells(ctx, g) {
 }
 
 export function drawTutorial(ctx, g, time) {
-  drawHeader(ctx, 'CARA BERMAIN — HOW TO PLAY', 'Learn the brush in minutes, then master the storm.');
+  drawHeader(ctx, 'CARA BERMAIN: HOW TO PLAY', 'The lesson teaches the first fusion. The guide covers the rest.');
   drawTutorialTabs(ctx, g);
   if (g.tutorial.page === 'lesson') drawTutorialLesson(ctx, g, time);
   else if (g.tutorial.page === 'guide') drawTutorialGuide(ctx, g, time);
@@ -2075,23 +2075,23 @@ export function tutorialJudge(g) {
       const acc = Math.round(result.accuracy * 100);
       t.dummyHp = Math.max(0, t.dummyHp - 34);
       t.lastHitAt = g.time;
-      t.feedback = { text: `火 Fire — ${acc}%! The dummy burns.`, color: '#e8590c' };
+      t.feedback = { text: `火 Fire: ${acc}%! The dummy burns.`, color: '#e8590c' };
       burst(t.particles, 250, 330, '#ff922b', 24, 200, 5, 0.8);
       ring(t.particles, 250, 330, '#e8590c', 90);
       playElementImpact('fire');
       t.step = 1;
       t.lastCastAt = g.time;
     } else if (result.element) {
-      t.feedback = { text: `That was ${result.element.kanji} ${result.element.name} — draw 火 (fire)!`, color: '#868e96' };
+      t.feedback = { text: `That was ${result.element.kanji} ${result.element.name}. Draw 火 (fire)!`, color: '#868e96' };
     } else {
-      t.feedback = { text: 'Unclear stroke — follow the ghost numbers.', color: '#868e96' };
+      t.feedback = { text: 'Unclear stroke. Follow the ghost numbers.', color: '#868e96' };
     }
     return;
   }
   // Step 1: wind inside the fusion window.
   const withinWindow = t.lastCastAt !== null && (g.time - t.lastCastAt) <= windowSeconds;
   if (!withinWindow) {
-    t.feedback = { text: 'Too slow — draw 火 again to restart the fusion.', color: '#c1271b' };
+    t.feedback = { text: 'Too slow. Draw 火 again to restart the fusion.', color: '#c1271b' };
     t.step = 0;
     t.lastCastAt = null;
     return;
@@ -2108,9 +2108,9 @@ export function tutorialJudge(g) {
     ring(t.particles, 250, 330, '#e8590c', 140);
     playCombo();
   } else if (result.element) {
-    t.feedback = { text: `That was ${result.element.kanji} — draw 風 (wind) to fuse!`, color: '#868e96' };
+    t.feedback = { text: `That was ${result.element.kanji}. Draw 風 (wind) to fuse!`, color: '#868e96' };
   } else {
-    t.feedback = { text: 'Unclear stroke — follow the ghost numbers.', color: '#868e96' };
+    t.feedback = { text: 'Unclear stroke. Follow the ghost numbers.', color: '#868e96' };
   }
 }
 
@@ -2128,7 +2128,7 @@ export function updateTutorial(g, dt) {
     if (t.step === 1 && t.lastCastAt !== null) {
       const windowSeconds = fusionWindowForRank(rankIndexFromPoints(g.progress.rankPoints));
       if (g.time - t.lastCastAt > windowSeconds) {
-        t.feedback = { text: 'The fusion window closed — draw 火 again.', color: '#c1271b' };
+        t.feedback = { text: 'The fusion window closed. Draw 火 again.', color: '#c1271b' };
         t.step = 0;
         t.lastCastAt = null;
       }

@@ -320,7 +320,7 @@ function castCombo(c, combo, secondElement, accuracy, perfect) {
   const firstEl = ELEMENT_BY_ID[combo.first];
   const secondEl = ELEMENT_BY_ID[combo.second];
   c.castFeedback = {
-    text: `${combo.kanji} ${combo.name.toUpperCase()} — ${accPct}%${perfect ? ' PERFECT!' : ''}`,
+    text: `${combo.kanji} ${combo.name.toUpperCase()}: ${accPct}%${perfect ? ' PERFECT!' : ''}`,
     color: combo.color, timer: 1.6, accuracy,
   };
   c.comboBanner = {
@@ -374,7 +374,7 @@ export function castSpell(c, element, accuracy) {
   playElementImpact(el.id);
   const accPct = Math.round(accuracy * 100);
   c.castFeedback = {
-    text: `${el.kanji} ${el.name.toUpperCase()} — ${accPct}%${perfect ? ' PERFECT!' : ''}`,
+    text: `${el.kanji} ${el.name.toUpperCase()}: ${accPct}%${perfect ? ' PERFECT!' : ''}`,
     color: el.color, timer: 1.4, accuracy,
   };
   if (el.id === 'earth') {
@@ -395,7 +395,7 @@ function tryAutoCast(c) {
     castSpell(c, result.element, result.accuracy);
   } else {
     c.ink = Math.max(0, c.ink - INK.fizzleCost);
-    c.castFeedback = { text: 'UNCLEAR STROKE — TRY AGAIN', color: '#868e96', timer: 1.2, accuracy: result.accuracy };
+    c.castFeedback = { text: 'UNCLEAR STROKE, TRY AGAIN', color: '#868e96', timer: 1.2, accuracy: result.accuracy };
     logBattleEvent(c, 'Unclear stroke. Try again.', '#868e96');
     playFizzle();
   }
@@ -1277,7 +1277,7 @@ export function drawCombat(ctx, c, time) {
   ctx.font = '700 20px Georgia, serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText(`Scroll ${def.scroll} — ${def.name}`, 34, 44);
+  ctx.fillText(`Scroll ${def.scroll}: ${def.name}`, 34, 44);
   ctx.font = 'italic 12px Georgia, serif';
   ctx.fillStyle = '#d9c9a8';
   ctx.fillText(def.title, 34, 62);
@@ -1300,7 +1300,7 @@ export function drawCombat(ctx, c, time) {
   ctx.fillText(`Score ${c.run.score}`, 990, 38);
   ctx.fillStyle = c.combo.count > 1 ? '#ff922b' : '#d9c9a8';
   ctx.font = '700 15px Georgia, serif';
-  ctx.fillText(c.combo.count > 1 ? `COMBO x${c.combo.count}` : 'COMBO —', 990, 60);
+  ctx.fillText(`COMBO x${c.combo.count}`, 990, 60);
   ctx.textAlign = 'left';
   // WIN/LOSE strip: the stakes of the fight, always visible at the top of
   // the combat screen, with the live fight grade in the middle.
@@ -1311,10 +1311,10 @@ export function drawCombat(ctx, c, time) {
   ctx.font = '700 13px Georgia, serif';
   ctx.textAlign = 'left';
   ctx.fillStyle = '#69db7c';
-  ctx.fillText(`✓ WIN — seal ${def.name}`, WINLOSE_STRIP.x + 12, WINLOSE_STRIP.y + 17);
+  ctx.fillText(`✓ WIN: seal ${def.name}`, WINLOSE_STRIP.x + 12, WINLOSE_STRIP.y + 17);
   ctx.textAlign = 'right';
   ctx.fillStyle = '#ff8787';
-  ctx.fillText('✗ LOSE — HP reaches 0', WINLOSE_STRIP.x + WINLOSE_STRIP.w - 12, WINLOSE_STRIP.y + 17);
+  ctx.fillText('✗ LOSE: HP reaches 0', WINLOSE_STRIP.x + WINLOSE_STRIP.w - 12, WINLOSE_STRIP.y + 17);
   const liveGrade = fightGrade(c);
   ctx.fillStyle = GRADE_COLORS[liveGrade];
   ctx.beginPath();
@@ -1582,7 +1582,7 @@ export function drawCombat(ctx, c, time) {
   ctx.fillStyle = '#2b2118';
   ctx.font = '700 15px Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.fillText('INK PAD — draw the kanji', PAD.x + PAD.w / 2, PAD.y - 12);
+  ctx.fillText('INK PAD: draw the kanji', PAD.x + PAD.w / 2, PAD.y - 12);
   ctx.fillStyle = '#fffdf5';
   ctx.beginPath();
   ctx.roundRect(PAD.x, PAD.y, PAD.w, PAD.h, 8);
@@ -1709,7 +1709,7 @@ export function drawCombat(ctx, c, time) {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#b02a1e';
     ctx.font = '700 15px Georgia, serif';
-    ctx.fillText(`— SCROLL ${def.scroll} OF 7 —`, 512, 190);
+    ctx.fillText(`SCROLL ${def.scroll} OF 7`, 512, 190);
     ctx.fillStyle = el.color;
     ctx.font = '700 64px "Noto Serif JP", serif';
     ctx.fillText(el.kanji, 512, 258);
@@ -1723,7 +1723,7 @@ export function drawCombat(ctx, c, time) {
     ctx.fillText(def.blurb, 512, 360);
     ctx.font = '700 15px Georgia, serif';
     ctx.fillStyle = weak.color;
-    ctx.fillText(`Weak against ${weak.kanji} ${weak.name} — draw it to deal double damage`, 512, 388);
+    ctx.fillText(`Weak against ${weak.kanji} ${weak.name}. Draw it to deal double damage`, 512, 388);
     ctx.restore();
   }
   // Win / lose banners over the arena.
@@ -1749,7 +1749,7 @@ export function drawCombat(ctx, c, time) {
     ctx.font = '700 56px Georgia, serif';
     ctx.fillText('THE INK RUNS DRY', 512, 250);
     ctx.font = 'italic 18px Georgia, serif';
-    ctx.fillText('Your brush falls silent… but every scroll can be rewritten.', 512, 288);
+    ctx.fillText('Your brush falls silent. The scroll waits for another try.', 512, 288);
     ctx.restore();
   }
 }

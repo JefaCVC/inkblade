@@ -83,7 +83,7 @@ function setScreen(name) {
     shop: 'The ink merchant. Spend essence on upgrades.',
     dojo: 'Training dojo. Practice drawing the kanji.',
     codex: 'Boss codex. Every demon the brush has met.',
-    leaderboard: 'Leaderboard. The ten finest brushes.',
+    leaderboard: 'Leaderboard. Your ten best runs.',
     history: 'Match history. Your last twenty runs.',
     tutorial: 'How to play. Learn the brush, the spells and the combos.',
     combos: 'Fusion combos. Which pairs of elements combine.',

@@ -180,20 +180,20 @@ export const BOSSES = [
     element: 'fire', weakness: 'water', hp: 240,
     attacks: ['fireball', 'ember'],
     blurb: 'A lantern-demon who mistook the temple for kindling.',
-    tip: 'Water douses flame — draw 水 first, and mind the embers.',
+    tip: 'Water douses flame. Draw 水 first, and mind the embers.',
   },
   {
     id: 'mizuchi', scroll: 2, name: 'Mizuchi', title: 'Tide Serpent of the Drowned Gate',
     element: 'water', weakness: 'lightning', hp: 330,
     attacks: ['jet', 'wave'],
     blurb: 'She floods the ink-wells every spring and will not apologise.',
-    tip: 'Lightning chains through water — and through her wisps.',
+    tip: 'Lightning chains through water, and through her wisps.',
   },
   {
     id: 'arashi', scroll: 3, name: 'Arashi', title: 'Gale Crow of the Broken Sky',
     element: 'wind', weakness: 'ice', hp: 430,
     attacks: ['blade', 'dive'],
-    blurb: 'His wings are the storm; his shadow is the warning.',
+    blurb: 'He dives out of the sky without a sound. His shadow is the only warning.',
     tip: 'Ice stills the gale. Freeze him, then strike while he dives.',
   },
   {
@@ -201,7 +201,7 @@ export const BOSSES = [
     element: 'lightning', weakness: 'earth', hp: 540,
     attacks: ['bolt', 'orb'],
     blurb: 'A kirin who answers every question with thunder.',
-    tip: 'Earth grounds lightning — raise 土 before his bolts land.',
+    tip: 'Earth grounds lightning. Raise 土 before his bolts land.',
   },
   {
     id: 'iwao', scroll: 5, name: 'Iwao', title: 'Mountain Golem of the Sleeping Stone',
@@ -215,13 +215,13 @@ export const BOSSES = [
     element: 'light', weakness: 'dark', hp: 820,
     attacks: ['beam', 'feather'],
     blurb: 'Her dawn never ends, and neither does her temper.',
-    tip: 'Dark drinks the dawn — draw 闇 against her light.',
+    tip: 'Dark drinks the dawn. Draw 闇 against her light.',
   },
   {
     id: 'yami', scroll: 7, name: 'Yami', title: 'Ink Dragon of the Final Scroll',
     element: 'dark', weakness: 'light', hp: 1000,
     attacks: ['orb', 'pool', 'summon'],
-    blurb: 'The dragon that drank the master\u2019s ink. End the story.',
+    blurb: 'The dragon that drank the master\u2019s ink. He holds the final scroll.',
     tip: 'Light banishes the dark dragon. Save 光 for the end.',
   },
 ];
@@ -245,12 +245,12 @@ export const DIFFICULTIES = [
   },
   {
     id: 'calligrapher', name: 'Calligrapher', kanji: '書', color: '#74c0fc',
-    desc: 'The intended road. True strength, true scores.',
+    desc: 'The intended road. Bosses at full strength, scores at full value.',
     bossHpMul: 1, bossDmgMul: 1, scoreMul: 1,
   },
   {
     id: 'master', name: 'Grand Master', kanji: '師', color: '#ffd43b',
-    desc: 'For the bold. Tougher bosses, richer scores.',
+    desc: 'Tougher bosses, bigger scores.',
     bossHpMul: 1.3, bossDmgMul: 1.25, scoreMul: 1.5,
   },
 ];
@@ -357,7 +357,7 @@ export const COMBOS = [
   {
     id: 'tempest', first: 'wind', second: 'lightning', name: 'Tempest', kanji: '嵐',
     damage: 110, cost: 30, effect: 'blades',
-    desc: 'Six storm strikes in a heartbeat. Rapid multi-hit damage.',
+    desc: 'Six storm strikes, one after another.',
     color: '#2b8a3e', glow: '#ffd43b',
   },
   {
