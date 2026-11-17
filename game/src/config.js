@@ -172,42 +172,49 @@ export const BOSSES = [
     element: 'fire', weakness: 'water', hp: 240,
     attacks: ['fireball', 'ember'],
     blurb: 'A lantern-demon who mistook the temple for kindling.',
+    tip: 'Water douses flame — draw 水 first, and mind the embers.',
   },
   {
     id: 'mizuchi', scroll: 2, name: 'Mizuchi', title: 'Tide Serpent of the Drowned Gate',
     element: 'water', weakness: 'lightning', hp: 330,
     attacks: ['jet', 'wave'],
     blurb: 'She floods the ink-wells every spring and will not apologise.',
+    tip: 'Lightning chains through water — and through her wisps.',
   },
   {
     id: 'arashi', scroll: 3, name: 'Arashi', title: 'Gale Crow of the Broken Sky',
     element: 'wind', weakness: 'ice', hp: 430,
     attacks: ['blade', 'dive'],
     blurb: 'His wings are the storm; his shadow is the warning.',
+    tip: 'Ice stills the gale. Freeze him, then strike while he dives.',
   },
   {
     id: 'raiko', scroll: 4, name: 'Raiko', title: 'Storm Kirin of the Iron Peaks',
     element: 'lightning', weakness: 'earth', hp: 540,
     attacks: ['bolt', 'orb'],
     blurb: 'A kirin who answers every question with thunder.',
+    tip: 'Earth grounds lightning — raise 土 before his bolts land.',
   },
   {
     id: 'iwao', scroll: 5, name: 'Iwao', title: 'Mountain Golem of the Sleeping Stone',
     element: 'earth', weakness: 'ice', hp: 680,
     attacks: ['rock', 'spikes'],
     blurb: 'He has been napping for three centuries. You woke him.',
+    tip: 'Ice shatters stone. Freeze, then shatter with Deep Freeze.',
   },
   {
     id: 'hikari', scroll: 6, name: 'Hikari', title: 'Dawn Phoenix of the White Sun',
     element: 'light', weakness: 'dark', hp: 820,
     attacks: ['beam', 'feather'],
     blurb: 'Her dawn never ends, and neither does her temper.',
+    tip: 'Dark drinks the dawn — draw 闇 against her light.',
   },
   {
     id: 'yami', scroll: 7, name: 'Yami', title: 'Ink Dragon of the Final Scroll',
     element: 'dark', weakness: 'light', hp: 1000,
     attacks: ['orb', 'pool', 'summon'],
     blurb: 'The dragon that drank the master\u2019s ink. End the story.',
+    tip: 'Light banishes the dark dragon. Save 光 for the end.',
   },
 ];
 
@@ -221,6 +228,89 @@ export const UPGRADES = [
   { id: 'ward', name: 'Paper Ward', desc: 'Start each fight shielded', cost: 80, max: 1, apply: (u) => { u.startShielded = true; } },
 ];
 
+// --- Difficulties (chosen on the menu, stored per run) ---
+export const DIFFICULTIES = [
+  {
+    id: 'student', name: 'Student', kanji: '学', color: '#69db7c',
+    desc: 'Gentle ink. Weaker bosses, smaller scores.',
+    bossHpMul: 0.8, bossDmgMul: 0.8, scoreMul: 0.75,
+  },
+  {
+    id: 'calligrapher', name: 'Calligrapher', kanji: '書', color: '#74c0fc',
+    desc: 'The intended road. True strength, true scores.',
+    bossHpMul: 1, bossDmgMul: 1, scoreMul: 1,
+  },
+  {
+    id: 'master', name: 'Grand Master', kanji: '師', color: '#ffd43b',
+    desc: 'For the bold. Tougher bosses, richer scores.',
+    bossHpMul: 1.3, bossDmgMul: 1.25, scoreMul: 1.5,
+  },
+];
+
+export const DIFFICULTY_BY_ID = Object.fromEntries(DIFFICULTIES.map((d) => [d.id, d]));
+
+// --- Blessings: the pick-1-of-3 draft between scrolls. Each blessing is
+// free, applies to the run, and lasts for the rest of the campaign. RARE
+// cards are stronger; one is a trade-off (+damage, -max HP).
+export const BLESSINGS = [
+  { id: 'inkwell', name: 'Deep Well', icon: '墨', rarity: 'COMMON', desc: '+25 max ink', apply: (run) => { run.maxInk += 25; } },
+  { id: 'heavy', name: 'Heavy Stroke', icon: '筆', rarity: 'COMMON', desc: '+10% spell damage', apply: (run) => { run.damage += 0.1; } },
+  { id: 'swift', name: 'Swift Brush', icon: '疾', rarity: 'COMMON', desc: '+2 ink per second', apply: (run) => { run.refill += 2; } },
+  { id: 'heart', name: 'Steady Heart', icon: '心', rarity: 'COMMON', desc: '+20 max HP, heal 20', apply: (run) => { run.maxHp += 20; run.hp = Math.min(run.maxHp, run.hp + 20); } },
+  { id: 'chain', name: 'Long Combo', icon: '連', rarity: 'COMMON', desc: '+1.5s combo window', apply: (run) => { run.comboWindow += 1.5; } },
+  { id: 'harvest', name: 'Ink Harvest', icon: '金', rarity: 'COMMON', desc: '+60 essence now', apply: (run) => { run.essence += 60; } },
+  { id: 'ward', name: 'Paper Ward', icon: '守', rarity: 'RARE', desc: 'Start every fight shielded', apply: (run) => { run.startShielded = true; } },
+  { id: 'fuse', name: 'Patient Ink', icon: '忍', rarity: 'RARE', desc: '+1s fusion window', apply: (run) => { run.fusionWindow += 1; } },
+  { id: 'glass', name: 'Glass Cannon', icon: '砕', rarity: 'RARE', desc: '+25% damage, −20 max HP', tradeoff: true, apply: (run) => { run.damage += 0.25; run.maxHp = Math.max(40, run.maxHp - 20); run.hp = Math.min(run.hp, run.maxHp); } },
+];
+
+export const BLESSING_BY_ID = Object.fromEntries(BLESSINGS.map((b) => [b.id, b]));
+
+// --- Feats (achievements): ten named deeds, persisted across runs. ---
+export const FEATS = [
+  { id: 'first-seal', icon: '封', name: 'First Seal', desc: 'Seal your first scroll' },
+  { id: 'first-fusion', icon: '炎', name: 'First Fusion', desc: 'Cast your first fusion combo' },
+  { id: 'all-combos', icon: '嵐', name: 'Master of Fusions', desc: 'Discover all 6 fusion combos' },
+  { id: 'perfect-fight', icon: '完', name: 'Flawless Brush', desc: 'Win a fight with 100% accuracy' },
+  { id: 'no-damage', icon: '盾', name: 'Untouched', desc: 'Win a fight without taking damage' },
+  { id: 's-grade', icon: '優', name: 'Grade S', desc: 'Earn an S grade in a fight' },
+  { id: 'all-scrolls', icon: '龍', name: 'Dragon Sealer', desc: 'Seal all 7 scrolls' },
+  { id: 'hundred-casts', icon: '百', name: 'Hundred Casts', desc: 'Cast 100 spells in total' },
+  { id: 'first-dan', icon: '初', name: 'First Dan', desc: 'Reach 1st Dan rank' },
+  { id: 'master-campaign', icon: '師', name: 'Grand Master', desc: 'Seal the campaign on Grand Master' },
+];
+
+export const FEAT_BY_ID = Object.fromEntries(FEATS.map((f) => [f.id, f]));
+
+// --- Roads: the branching choice between scrolls. A modifier, not a
+// route reorder — the next scroll is fixed, but the road changes the
+// fight (and the reward) that waits at its end.
+export const ROADS = [
+  {
+    id: 'mountain', name: 'Mountain Path', icon: '山',
+    risk: 'Boss minions +50% HP', reward: '+60 essence',
+    apply: (run) => { run.essence += 60; run.roadMinionHpMul = 1.5; },
+  },
+  {
+    id: 'river', name: 'River Path', icon: '川',
+    risk: '−20 max ink this fight', reward: 'Boss starts at 90% HP',
+    apply: (run) => { run.roadInkPenalty = 20; run.roadBossHpMul = 0.9; },
+  },
+];
+
+export const ROAD_BY_ID = Object.fromEntries(ROADS.map((r) => [r.id, r]));
+
+// Campaign grade from the seven per-scroll grades (S=4, A=3, B=2, C=1).
+export function campaignGrade(scrollGrades) {
+  const values = { S: 4, A: 3, B: 2, C: 1 };
+  const filled = scrollGrades.filter((g) => g);
+  if (filled.length === 0) return 'C';
+  const avg = filled.reduce((sum, g) => sum + (values[g] ?? 1), 0) / filled.length;
+  if (avg >= 3.5) return 'S';
+  if (avg >= 2.5) return 'A';
+  if (avg >= 1.5) return 'B';
+  return 'C';
+}
 export const PERFECT_THRESHOLD = 0.9;
 export const CAST_THRESHOLD = 0.55;
 export const CAST_PAUSE_MS = 900; // auto-cast this long after the last stroke

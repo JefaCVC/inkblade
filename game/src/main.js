@@ -3,20 +3,20 @@
 // file only wires them together, keeps the campaign run, and records every
 // finished fight in the leaderboard, the history and the codex.
 
-import { BOSSES, ELEMENTS, UPGRADES, VIEW } from './config.js';
+import { BLESSING_BY_ID, BLESSINGS, BOSSES, DIFFICULTY_BY_ID, ELEMENTS, ROAD_BY_ID, UPGRADES, VIEW } from './config.js';
 import { createCombat, updateCombat, drawCombat, combatMouseDown, combatMouseMove, combatMouseUp, combatKey, fightGrade } from './combat.js';
 import {
   drawMenu, drawScrolls, drawShop, drawDojo, drawCodex, drawLeaderboard,
   drawHistory, drawVictory, drawDefeat, drawPause, drawHelp, drawCombos,
-  drawRank, drawTutorial, resetTutorial,
+  drawRank, drawTutorial, resetTutorial, drawDraft, drawRoads,
   dojoMouseDown, dojoMouseMove, dojoMouseUp, dojoJudge,
   tutorialMouseDown, tutorialMouseMove, tutorialMouseUp, updateTutorial,
 } from './screens.js';
 import { drawFrame, drawPaper, setBrushStyle } from './sprites.js';
 import { stageShot } from './shots.js';
 import {
-  loadCodex, loadHistory, loadLeaderboard, loadProgress, recordComboDiscovered,
-  recordBossFight, recordRun, recordScore, saveProgress,
+  loadCodex, loadFeats, loadHistory, loadLeaderboard, loadProgress, recordComboDiscovered,
+  recordBossFight, recordRun, recordScore, saveProgress, unlockFeat,
 } from './storage.js';
 import { isMuted, playClick, playRankUp, setMuted, startMusic, unlockAudio } from './audio.js';
 import { awardRankPoints, fusionWindowForRank, inkBonusForRank, rankIndexFromPoints } from './ranks.js';
@@ -39,6 +39,8 @@ function newRun() {
     maxInk: 100 + inkBonusForRank(idx), refill: 6, damage: 0, maxHp: 100, hp: 100,
     comboWindow: 6, startShielded: false, upgradesOwned: {},
     fusionWindow: fusionWindowForRank(idx),
+    difficulty: progress.difficulty ?? 'calligrapher',
+    scrollGrades: [], scrollScores: [], featsEarned: [],
   };
 }
 
@@ -51,6 +53,11 @@ const g = {
   codex: loadCodex(),
   leaderboard: loadLeaderboard(),
   history: loadHistory(),
+  feats: loadFeats(),
+  newFeats: [],
+  pendingDraft: false,
+  pendingRoad: false,
+  draft: null,
   combat: null,
   dojo: { selected: 'fire', strokes: [], currentStroke: null, drawing: false, lastStrokeAt: 0, feedback: null, best: 0 },
   tutorial: null,
@@ -84,6 +91,8 @@ function setScreen(name) {
     combat: 'Combat. Draw kanji in the ink pad to cast spells.',
     victory: 'Scroll sealed. Victory.',
     defeat: 'Defeat. The ink runs dry.',
+    draft: 'Choose a blessing. Pick one of three cards.',
+    roads: 'Choose a road. Two paths to the next scroll.',
   };
   if (statusEl) statusEl.textContent = labels[name] ?? name;
 }
@@ -91,12 +100,46 @@ function setScreen(name) {
 function startFight(scrollIndex) {
   g.run.scrollIndex = scrollIndex;
   g.runStarted = true;
+  g.newFeats = [];
   g.combat = createCombat(scrollIndex, g.run, {
     // recordComboDiscovered mutates + saves in place and returns a boolean;
     // it is not an assignment.
-    onComboDiscovered: (comboId) => recordComboDiscovered(g.progress, comboId),
+    onComboDiscovered: (comboId) => {
+      if (!recordComboDiscovered(g.progress, comboId)) return;
+      // Feats: first fusion ever, and all six discovered.
+      awardFeat('first-fusion');
+      if (g.progress.combosDiscovered.length >= 6) awardFeat('all-combos');
+    },
   });
+  // The road's modifiers are consumed by this fight and no other.
+  delete g.run.roadMinionHpMul;
+  delete g.run.roadInkPenalty;
+  delete g.run.roadBossHpMul;
   setScreen('combat');
+}
+
+// Unlock a feat (persisted). Newly unlocked feats are collected for the
+// victory screen's NEW badges and for the campaign dashboard.
+function awardFeat(featId) {
+  if (!unlockFeat(featId)) return false;
+  g.feats = loadFeats();
+  if (!g.newFeats.includes(featId)) g.newFeats.push(featId);
+  if (!g.run.featsEarned.includes(featId)) g.run.featsEarned.push(featId);
+  return true;
+}
+
+function rollDraftCards() {
+  const pool = [...BLESSINGS];
+  const cards = [];
+  while (cards.length < 3 && pool.length > 0) {
+    const i = Math.floor(Math.random() * pool.length);
+    cards.push(pool.splice(i, 1)[0].id);
+  }
+  return cards;
+}
+
+function rerollCost() {
+  return 20 * ((g.draft?.rerolls ?? 0) + 1);
 }
 
 function buyUpgrade(id) {
@@ -115,21 +158,33 @@ function finishFight(won) {
   const seconds = Math.max(1, Math.round(c.time - c.stats.startTime));
   const accuracy = c.stats.casts > 0 ? c.stats.accuracySum / c.stats.casts : 0;
   const boss = BOSSES[c.scrollIndex];
+  const grade = fightGrade(c);
+  const diff = DIFFICULTY_BY_ID[g.run.difficulty] ?? DIFFICULTY_BY_ID.calligrapher;
+  const campaignComplete = won && c.scrollIndex === 6;
   let fightScore = 0;
   if (won) {
-    fightScore = c.stats.damage + Math.max(0, 300 - seconds * 2) + Math.round(accuracy * 100) + c.stats.maxCombo * 10;
+    // Difficulty scales the score: Master pays half as much again.
+    fightScore = Math.round((c.stats.damage + Math.max(0, 300 - seconds * 2) + Math.round(accuracy * 100) + c.stats.maxCombo * 10) * diff.scoreMul);
     g.run.score += fightScore;
     g.run.essence += c.essenceEarned;
     g.run.hp = c.player.hp;
     g.progress.unlockedScroll = Math.max(g.progress.unlockedScroll, Math.min(7, c.scrollIndex + 2));
     g.progress.bestScore = Math.max(g.progress.bestScore, g.run.score);
-    if (c.scrollIndex === 6) {
+    g.progress.bestScores[g.run.difficulty] = Math.max(g.progress.bestScores[g.run.difficulty] ?? 0, g.run.score);
+    g.progress.furthestScroll = Math.max(g.progress.furthestScroll, c.scrollIndex + 1);
+    g.progress.lastGrade = grade;
+    g.run.scrollGrades[c.scrollIndex] = grade;
+    g.run.scrollScores[c.scrollIndex] = fightScore;
+    if (campaignComplete) {
       g.progress.campaignWins += 1;
       g.leaderboard = recordScore({
         score: g.run.score, scrolls: 7, accuracy, result: 'Sealed all 7',
+        difficulty: g.run.difficulty,
       });
     }
   }
+  g.progress.totalCasts += c.stats.casts;
+  saveProgress(g.progress);
   // Rank points: accuracy points + combo bonuses came from combat; bosses,
   // scrolls and no-damage clears add on top. A rank-up grows the ink well
   // and the fusion window mid-campaign (shop Well upgrades kept on top).
@@ -143,17 +198,30 @@ function finishFight(won) {
     g.run.maxInk = 100 + inkBonusForRank(idx) + wells * 25;
     g.run.fusionWindow = fusionWindowForRank(idx);
   }
+  // Feats: checked at the end of every fight (and on combo discovery).
+  if (won) awardFeat('first-seal');
+  if (won && accuracy >= 0.999) awardFeat('perfect-fight');
+  if (won && c.stats.damageTaken === 0) awardFeat('no-damage');
+  if (won && grade === 'S') awardFeat('s-grade');
+  if (campaignComplete) awardFeat('all-scrolls');
+  if (campaignComplete && g.run.difficulty === 'master') awardFeat('master-campaign');
+  if (g.progress.totalCasts >= 100) awardFeat('hundred-casts');
+  if (rankIndexFromPoints(g.progress.rankPoints) >= 10) awardFeat('first-dan');
   g.codex = recordBossFight(boss.id, won, won ? seconds : null);
   g.history = recordRun({
     scroll: boss.scroll, boss: boss.name, result: won ? 'Sealed' : 'Fell',
     score: won ? fightScore : 0, seconds,
   });
+  // A win opens the between-scrolls flow: blessing draft, then the road.
+  g.pendingDraft = won && !campaignComplete;
+  g.pendingRoad = won && !campaignComplete;
+  g.draft = null;
   g.lastResult = {
     scrollIndex: c.scrollIndex, seconds, casts: c.stats.casts, accuracy,
     perfects: c.stats.perfects, maxCombo: c.stats.maxCombo, damage: c.stats.damage,
     essence: won ? c.essenceEarned : 0, score: fightScore,
-    campaignComplete: won && c.scrollIndex === 6,
-    rankPoints, rankUp, grade: fightGrade(c),
+    campaignComplete,
+    rankPoints, rankUp, grade,
   };
   setScreen(won ? 'victory' : 'defeat');
 }
@@ -204,7 +272,54 @@ function handleButton(id) {
   if (id === 'next-scroll') {
     const next = g.run.scrollIndex + 1;
     if (next > 6) { setScreen('menu'); return; }
+    // Between scrolls: blessing draft first, then the road, then the shop.
+    // The shop's NEXT SCROLL routes through any step still pending, so the
+    // player can detour to the shop first without skipping the draft.
+    if (g.pendingDraft) {
+      if (!g.draft) g.draft = { cards: rollDraftCards(), rerolls: 0 };
+      setScreen('draft');
+      return;
+    }
+    if (g.pendingRoad) { setScreen('roads'); return; }
     startFight(next);
+    return;
+  }
+  if (id.startsWith('diff-')) {
+    const diffId = id.slice(5);
+    if (!DIFFICULTY_BY_ID[diffId]) return;
+    g.progress.difficulty = diffId;
+    saveProgress(g.progress);
+    // A run already in progress keeps its difficulty; the choice applies
+    // to the next run. A fresh run picks it up in newRun().
+    if (!g.runStarted) g.run.difficulty = diffId;
+    return;
+  }
+  if (id.startsWith('draft-pick-')) {
+    const idx = parseInt(id.slice(11), 10);
+    const blessingId = g.draft?.cards[idx];
+    const blessing = BLESSING_BY_ID[blessingId];
+    if (!blessing) return;
+    blessing.apply(g.run);
+    g.pendingDraft = false;
+    g.draft = null;
+    setScreen(g.pendingRoad ? 'roads' : 'shop');
+    return;
+  }
+  if (id === 'draft-reroll') {
+    if (!g.draft) return;
+    const cost = rerollCost();
+    if (g.run.essence < cost) return;
+    g.run.essence -= cost;
+    g.draft.rerolls += 1;
+    g.draft.cards = rollDraftCards();
+    return;
+  }
+  if (id.startsWith('road-')) {
+    const road = ROAD_BY_ID[id.slice(5)];
+    if (!road) return;
+    road.apply(g.run);
+    g.pendingRoad = false;
+    setScreen('shop');
     return;
   }
   if (id.startsWith('fight-')) {
@@ -334,6 +449,8 @@ function frame(now) {
     case 'combat': if (g.combat) drawCombat(ctx, g.combat, g.time); break;
     case 'victory': drawVictory(ctx, g, g.time); break;
     case 'defeat': drawDefeat(ctx, g); break;
+    case 'draft': drawDraft(ctx, g); break;
+    case 'roads': drawRoads(ctx, g); break;
     default: drawMenu(ctx, g, g.time);
   }
   // Global chrome: mute always, help on the menu. The buttons are wide

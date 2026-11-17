@@ -28,10 +28,13 @@ function check(name, ok, detail = '') {
   if (!ok) failures += 1;
 }
 
-// Draw one element's kanji with real mouse strokes, in any pad. Five
-// interpolated moves per segment at 5ms: fast enough that two kanji in a
-// row fit inside the 4s fusion window, dense enough for the recogniser
-// (it resamples each stroke to 16 points anyway).
+// Draw one element's kanji with real mouse strokes, in any pad. Two
+// interpolated moves per segment at 5 ms: each mouse round-trip costs
+// ~80 ms in this VM, so 5 moves/segment made a draw take ~3 s — the
+// 900 ms auto-cast pause fired mid-kanji and the fire→wind cast gap
+// blew past the 4 s fusion window. Two moves is plenty for the
+// recogniser (it resamples each stroke to 16 points anyway) and keeps
+// a draw near ~1 s with a comfortable fusion margin.
 async function drawKanjiAt(page, elementId, padX, padY, padW, padH) {
   const el = ELEMENT_BY_ID[elementId];
   for (const stroke of el.strokes) {
@@ -41,13 +44,13 @@ async function drawKanjiAt(page, elementId, padX, padY, padW, padH) {
     for (let i = 1; i < pts.length; i += 1) {
       const [x0, y0] = pts[i - 1];
       const [x1, y1] = pts[i];
-      for (let s = 1; s <= 5; s += 1) {
-        await page.mouse.move(x0 + ((x1 - x0) * s) / 5, y0 + ((y1 - y0) * s) / 5);
+      for (let s = 1; s <= 2; s += 1) {
+        await page.mouse.move(x0 + ((x1 - x0) * s) / 3, y0 + ((y1 - y0) * s) / 3);
         await page.waitForTimeout(5);
       }
     }
     await page.mouse.up();
-    await page.waitForTimeout(120);
+    await page.waitForTimeout(60);
   }
 }
 
@@ -80,7 +83,7 @@ const screen0 = await page.evaluate(() => window.__inkblade.screen);
 check('menu loads', screen0 === 'menu', `screen=${screen0}`);
 
 // --- 2. Play -> combat intro -> fight. ---
-await clickButton(page, 512, 358); // PLAY button
+await clickButton(page, 782, 380); // PLAY button (menu dashboard, right column)
 await page.waitForTimeout(2600);
 const screen1 = await page.evaluate(() => window.__inkblade.screen);
 const phase1 = await page.evaluate(() => window.__inkblade.combat?.phase);
@@ -171,7 +174,7 @@ await page.evaluate(() => {
   c.boss.attackTimer = 999;
 });
 await drawKanji(page, 'fire');
-await page.waitForTimeout(1100); // just past the 900ms auto-cast pause
+await page.waitForTimeout(1000); // just past the 900ms auto-cast pause
 await drawKanji(page, 'wind');
 // --- 4d. Float texts never overlap the fusion banner: sample the live
 // float positions for 1.5s while the fusion lands and check every one
@@ -217,6 +220,11 @@ check('victory stats recorded', victoryResult && victoryResult.damage > 0 && vic
 check('fight grade awarded', victoryResult && ['S', 'A', 'B', 'C'].includes(victoryResult.grade), `grade=${victoryResult?.grade}`);
 const rankAfterFight = await page.evaluate(() => window.__inkblade.progress.rankPoints);
 check('rank points awarded', victoryResult.rankPoints > 0 && rankAfterFight >= victoryResult.rankPoints, `fight +${victoryResult.rankPoints}, total ${rankAfterFight}`);
+// --- 6b. Feats: the first seal and the first fusion unlocked. ---
+const featsAfterFight = await page.evaluate(() => window.__inkblade.feats);
+check('feats unlock on fight milestones', featsAfterFight.includes('first-seal') && featsAfterFight.includes('first-fusion'), JSON.stringify(featsAfterFight));
+const bestByDiff = await page.evaluate(() => window.__inkblade.progress.bestScores);
+check('best score stored per difficulty', bestByDiff.calligrapher > 0, JSON.stringify(bestByDiff));
 await clickButton(page, 726, 502); // SHOP
 await page.waitForTimeout(300);
 const screen3 = await page.evaluate(() => window.__inkblade.screen);
@@ -228,11 +236,53 @@ const bought = await page.evaluate(() => ({
   essence: window.__inkblade.run.essence,
 }));
 check('shop purchase works', bought.owned === 1 && bought.essence < essenceBefore, `owned=${bought.owned} essence ${essenceBefore}->${bought.essence}`);
+// --- 6c. Between scrolls: the shop's NEXT SCROLL routes to the draft. ---
+await clickButton(page, 839, 541); // NEXT SCROLL
+await page.waitForTimeout(300);
+check('draft opens after victory', (await page.evaluate(() => window.__inkblade.screen)) === 'draft');
+// Reroll: fund the essence, pay the rising cost, get a fresh hand.
+// (Wait a beat after funding: the reroll button only re-registers as
+// enabled on the next frame after the essence changes.)
+await page.evaluate(() => { window.__inkblade.run.essence = 100; });
+await page.waitForTimeout(300);
+await clickButton(page, 512, 462); // REROLL
+const draftAfterReroll = await page.evaluate(() => ({
+  cards: [...window.__inkblade.draft.cards],
+  rerolls: window.__inkblade.draft.rerolls,
+  essence: window.__inkblade.run.essence,
+}));
+check('draft reroll costs essence and redeals', draftAfterReroll.rerolls === 1 && draftAfterReroll.essence === 80 && draftAfterReroll.cards.length === 3, JSON.stringify(draftAfterReroll));
+// Pick the first blessing: the run must change and the roads must open.
+const runBeforePick = await page.evaluate(() => {
+  const r = window.__inkblade.run;
+  return { maxInk: r.maxInk, damage: r.damage, refill: r.refill, maxHp: r.maxHp, comboWindow: r.comboWindow, essence: r.essence, startShielded: r.startShielded, fusionWindow: r.fusionWindow };
+});
+await clickButton(page, 180, 379); // PICK on the first blessing card
+await page.waitForTimeout(300);
+check('roads open after the draft pick', (await page.evaluate(() => window.__inkblade.screen)) === 'roads');
+const runAfterPick = await page.evaluate(() => {
+  const r = window.__inkblade.run;
+  return { maxInk: r.maxInk, damage: r.damage, refill: r.refill, maxHp: r.maxHp, comboWindow: r.comboWindow, essence: r.essence, startShielded: r.startShielded, fusionWindow: r.fusionWindow };
+});
+const pickChanged = Object.keys(runBeforePick).some((k) => runBeforePick[k] !== runAfterPick[k]);
+check('blessing applies to the run', pickChanged, `${JSON.stringify(runBeforePick)} -> ${JSON.stringify(runAfterPick)}`);
+// --- 6d. Roads: take the Mountain Path (+60 essence, tougher minions). ---
+const essenceBeforeRoad = await page.evaluate(() => window.__inkblade.run.essence);
+await clickButton(page, 266, 411); // TAKE THIS ROAD (Mountain Path)
+await page.waitForTimeout(300);
+check('shop opens after the road choice', (await page.evaluate(() => window.__inkblade.screen)) === 'shop');
+const roadApplied = await page.evaluate(() => ({
+  essence: window.__inkblade.run.essence,
+  minionMul: window.__inkblade.run.roadMinionHpMul,
+}));
+check('mountain road grants essence and toughens minions', roadApplied.essence === essenceBeforeRoad + 60 && roadApplied.minionMul === 1.5, JSON.stringify(roadApplied));
 await clickButton(page, 839, 541); // NEXT SCROLL
 await page.waitForTimeout(2600);
 const screen4 = await page.evaluate(() => window.__inkblade.screen);
 const scroll2 = await page.evaluate(() => window.__inkblade.combat?.def.scroll);
 check('next scroll starts', screen4 === 'combat' && scroll2 === 2, `screen=${screen4} scroll=${scroll2}`);
+const roadMinions = await page.evaluate(() => window.__inkblade.combat.summons.filter((s) => s.minion).map((s) => s.hp));
+check('road minions have +50% HP', roadMinions.length >= 2 && roadMinions.every((hp) => hp === 18), `minion hp=${JSON.stringify(roadMinions)}`);
 
 // --- 7. Defeat path: 1 HP, stand still, let the boss land a hit. ---
 await page.evaluate(() => {
@@ -256,7 +306,7 @@ await clickButton(page, 512, 345); // ABANDON TO MENU
 await page.waitForTimeout(300);
 const backMenu = await page.evaluate(() => window.__inkblade.screen);
 check('abandon returns to menu', backMenu === 'menu', `screen=${backMenu}`);
-await clickButton(page, 579, 402); // DOJO
+await clickButton(page, 202, 495); // DOJO
 await page.waitForTimeout(300);
 const screenDojo = await page.evaluate(() => window.__inkblade.screen);
 check('dojo opens', screenDojo === 'dojo', `screen=${screenDojo}`);
@@ -268,21 +318,21 @@ check('dojo opens', screenDojo === 'dojo', `screen=${screenDojo}`);
   check('dojo judges a drawn kanji', judged && judged.accuracy >= 0.55, JSON.stringify(judged));
 }
 await clickButton(page, 85, 539); // MENU
-await clickButton(page, 255, 504); // CODEX
+await clickButton(page, 574, 495); // CODEX
 await page.waitForTimeout(300);
 check('codex opens', (await page.evaluate(() => window.__inkblade.screen)) === 'codex');
 await clickButton(page, 85, 539); // MENU
-await clickButton(page, 579, 504); // LEADERBOARD
+await clickButton(page, 822, 495); // LEADERBOARD
 await page.waitForTimeout(300);
 check('leaderboard opens', (await page.evaluate(() => window.__inkblade.screen)) === 'leaderboard');
 await clickButton(page, 85, 539); // MENU
-await clickButton(page, 741, 504); // HISTORY
+await clickButton(page, 946, 495); // HISTORY
 await page.waitForTimeout(300);
 check('history opens', (await page.evaluate(() => window.__inkblade.screen)) === 'history');
 
 // --- 8b. Tutorial: the interactive lesson (fire, then wind = Firestorm). ---
 await clickButton(page, 85, 539); // MENU
-await clickButton(page, 445, 450); // TUTORIAL
+await clickButton(page, 326, 495); // TUTORIAL
 await page.waitForTimeout(300);
 check('tutorial opens', (await page.evaluate(() => window.__inkblade.screen)) === 'tutorial');
 await drawKanjiAt(page, 'fire', 490, 176, 300, 300);
@@ -305,13 +355,13 @@ check('tutorial spells tab opens', (await page.evaluate(() => window.__inkblade.
 
 // --- 8c. Combos guide and rank ladder. ---
 await clickButton(page, 85, 539); // MENU
-await clickButton(page, 579, 450); // COMBOS
+await clickButton(page, 450, 495); // COMBOS
 await page.waitForTimeout(300);
 check('combos screen opens', (await page.evaluate(() => window.__inkblade.screen)) === 'combos');
 const comboShown = await page.evaluate(() => window.__inkblade.progress.combosDiscovered.includes('firestorm'));
 check('combos screen shows the discovered Firestorm', comboShown === true);
 await clickButton(page, 85, 539); // MENU
-await clickButton(page, 417, 504); // RANK
+await clickButton(page, 698, 495); // RANK
 await page.waitForTimeout(300);
 check('rank screen opens', (await page.evaluate(() => window.__inkblade.screen)) === 'rank');
 const rankShown = await page.evaluate(() => window.__inkblade.progress.rankPoints);
@@ -330,6 +380,30 @@ const storedAfter = await page.evaluate(() => ({
   progress: JSON.parse(localStorage.getItem('inkblade_progress_v1') ?? '{}').unlockedScroll,
 }));
 check('records survive reload', storedAfter.history === storedBefore.history && storedAfter.progress >= 2, JSON.stringify(storedAfter));
+const featsAfterReload = await page.evaluate(() => window.__inkblade.feats);
+check('feats survive reload', featsAfterReload.includes('first-seal') && featsAfterReload.includes('first-fusion'), JSON.stringify(featsAfterReload));
+
+// --- 9b. Difficulty select: Master makes the boss tougher, and the
+// choice persists. (After the reload the run is fresh, so PLAY starts a
+// new run on the selected difficulty.)
+await clickButton(page, 441, 380); // Grand Master card
+const diffMaster = await page.evaluate(() => window.__inkblade.progress.difficulty);
+check('difficulty select picks Master', diffMaster === 'master', `difficulty=${diffMaster}`);
+await clickButton(page, 782, 380); // PLAY
+await page.waitForTimeout(2600);
+const masterFight = await page.evaluate(() => ({
+  maxHp: window.__inkblade.combat.boss.maxHp,
+  diffId: window.__inkblade.combat.difficulty.id,
+  dmgMul: window.__inkblade.combat.difficulty.bossDmgMul,
+}));
+check('master difficulty scales the boss', masterFight.maxHp === 312 && masterFight.diffId === 'master' && masterFight.dmgMul === 1.25, JSON.stringify(masterFight));
+await page.keyboard.press('p');
+await page.waitForTimeout(300);
+await clickButton(page, 512, 345); // ABANDON TO MENU
+await page.waitForTimeout(300);
+await clickButton(page, 271, 380); // Calligrapher card (back to default)
+const diffBack = await page.evaluate(() => window.__inkblade.progress.difficulty);
+check('difficulty select returns to Calligrapher', diffBack === 'calligrapher', `difficulty=${diffBack}`);
 
 // --- 10. No console errors, no page errors, no outside requests. ---
 check('no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
@@ -344,6 +418,15 @@ const shots = JSON.parse(readFileSync(join(ROOT, 'shots.json'), 'utf8'));
 for (const shot of shots) {
   await page.goto(`${BASE}/${shot.query}`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1600);
+  if (shot.name === '4-victory.jpg') {
+    const campaign = await page.evaluate(() => ({
+      screen: window.__inkblade.screen,
+      complete: window.__inkblade.lastResult?.campaignComplete,
+      grades: window.__inkblade.run.scrollGrades.length,
+      scores: window.__inkblade.run.scrollScores.length,
+    }));
+    check('campaign dashboard staged for shot 4', campaign.screen === 'victory' && campaign.complete === true && campaign.grades === 7 && campaign.scores === 7, JSON.stringify(campaign));
+  }
   const path = join(ROOT, 'screenshots', shot.name);
   await page.screenshot({ path, type: 'jpeg', quality: 82 });
   const size = statSync(path).size;

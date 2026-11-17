@@ -90,11 +90,17 @@ export function stageShot(name, g) {
   }
   if (name === 'end') {
     g.run = g.newRun();
-    g.run.score = 1240;
+    g.run.score = 6260;
     g.run.essence = 96;
+    // The campaign dashboard: all seven scrolls sealed, with per-scroll
+    // grades and scores, feats earned on the run, and a rank-up.
+    g.run.scrollGrades = ['A', 'B', 'A', 'S', 'A', 'B', 'A'];
+    g.run.scrollScores = [650, 720, 810, 940, 880, 1020, 1240];
+    g.run.featsEarned = ['first-seal', 'first-fusion', 's-grade'];
+    g.newFeats = ['s-grade', 'all-scrolls'];
     g.lastResult = {
-      scrollIndex: 0, seconds: 96, casts: 14, accuracy: 0.86, perfects: 5,
-      maxCombo: 6, damage: 268, essence: 96, score: 1240, campaignComplete: false,
+      scrollIndex: 6, seconds: 142, casts: 18, accuracy: 0.88, perfects: 6,
+      maxCombo: 7, damage: 1040, essence: 96, score: 1240, campaignComplete: true,
       rankPoints: 210, rankUp: RANKS[1], grade: 'A',
     };
     g.screen = 'victory';

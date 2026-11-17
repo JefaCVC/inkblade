@@ -3,7 +3,7 @@
 // cast elemental spells. Bosses have distinct attack patterns, phases and a
 // weakness; spells interact with the elemental wheel, combos and ink.
 
-import { ARENA, BANNER, BOSSES, CAST_PAUSE_MS, COMBO, COMBOS, ELEMENTS, ELEMENT_BY_ID, INK, MINIONS, PAD, PERFECT_THRESHOLD, PLAYER, STRONG_AGAINST, WINLOSE_STRIP, comboPartner, combosFrom, effectiveness, findCombo } from './config.js';
+import { ARENA, BANNER, BOSSES, CAST_PAUSE_MS, COMBO, COMBOS, DIFFICULTY_BY_ID, ELEMENTS, ELEMENT_BY_ID, INK, MINIONS, PAD, PERFECT_THRESHOLD, PLAYER, STRONG_AGAINST, WINLOSE_STRIP, comboPartner, combosFrom, effectiveness, findCombo } from './config.js';
 import { drawBoss, drawBrushStroke, drawPlayer, drawSeal } from './sprites.js';
 import { burst, floatText, makeParticles, ring, spellBurst, trail, updateParticles, drawParticles } from './particles.js';
 import { recognise, isRealStroke } from './strokes.js';
@@ -23,18 +23,23 @@ function buttonRect(i) {
 
 export function createCombat(scrollIndex, run, hooks = {}) {
   const def = BOSSES[scrollIndex];
+  const diff = DIFFICULTY_BY_ID[run.difficulty] ?? DIFFICULTY_BY_ID.calligrapher;
+  // Difficulty scales the boss; the chosen road may scale it further (the
+  // River Path starts the boss wounded) or shrink the ink well.
+  const bossHp = Math.round(def.hp * diff.bossHpMul * (run.roadBossHpMul ?? 1));
+  const maxInk = Math.max(20, run.maxInk - (run.roadInkPenalty ?? 0));
   const c = {
-    def, scrollIndex, run, hooks,
+    def, scrollIndex, run, hooks, difficulty: diff,
     phase: 'intro', phaseTimer: 0,
     time: 0,
     boss: {
-      hp: def.hp, maxHp: def.hp, x: 450, y: 305, r: 100,
+      hp: bossHp, maxHp: bossHp, x: 450, y: 305, r: 100,
       attackTimer: 1.6, pattern: 0, frozenUntil: 0, burnUntil: 0, burnTick: 0, burnDmg: 3,
       knockX: 0, diving: null, enraged: false,
     },
-    minionTimer: 10, minionsSpawned: 0,
+    minionTimer: 10, minionsSpawned: 0, minionHpMul: run.roadMinionHpMul ?? 1,
     player: { x: PLAYER.startX, y: PLAYER.startY, hp: run.maxHp, maxHp: run.maxHp, shield: run.startShielded, invuln: 0 },
-    ink: run.maxInk, maxInk: run.maxInk, refill: run.refill,
+    ink: maxInk, maxInk, refill: run.refill,
     combo: { count: 0, timer: 0 },
     selected: 'fire',
     lastCast: null, comboBanner: null, pendingHits: [],
@@ -69,7 +74,7 @@ function spawnMinion(c) {
   const a = Math.random() * Math.PI * 2;
   const s = {
     x: b.x + Math.cos(a) * (c.boss.r + 30), y: b.y + Math.sin(a) * (c.boss.r + 30),
-    vx: 0, vy: 0, r: 13, hp: 12, color: spec.color, kind: 'minion', age: 0,
+    vx: 0, vy: 0, r: 13, hp: Math.round(12 * c.minionHpMul), color: spec.color, kind: 'minion', age: 0,
     minion: true, name: spec.name,
   };
   s.x = Math.max(ARENA.x + 20, Math.min(ARENA.x + ARENA.w - 20, s.x));
@@ -181,7 +186,7 @@ function bossAttack(c) {
   }
 }
 
-function damagePlayer(c, amount) {
+function damagePlayer(c, rawAmount) {
   if (c.player.invuln > 0 || c.phase !== 'fight') return;
   if (c.player.shield) {
     c.player.shield = false;
@@ -190,6 +195,8 @@ function damagePlayer(c, amount) {
     ring(c.particles, c.player.x, c.player.y, '#d0a06a', 60);
     return;
   }
+  // Difficulty scales every boss hit.
+  const amount = Math.max(1, Math.round(rawAmount * c.difficulty.bossDmgMul));
   c.player.hp = Math.max(0, c.player.hp - amount);
   c.player.invuln = 0.8;
   c.stats.damageTaken += amount;
@@ -1549,6 +1556,17 @@ export function drawCombat(ctx, c, time) {
       ctx.fillText('★', r.x + r.w - 10, r.y + 13);
     }
   });
+  // Difficulty chip: the active difficulty, always visible in the fight.
+  // Text is centred slightly left and kept short: the SOUND button sits
+  // over the chip's right end (x >= 944).
+  ctx.fillStyle = 'rgba(43, 33, 24, 0.85)';
+  ctx.beginPath();
+  ctx.roundRect(PAD.x, PAD.y + PAD.h + 138, PAD.w, 22, 8);
+  ctx.fill();
+  ctx.fillStyle = c.difficulty.color;
+  ctx.font = '700 12px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${c.difficulty.kanji} ${c.difficulty.name}  ·  HP x${c.difficulty.bossHpMul}  ·  Score x${c.difficulty.scoreMul}`, PAD.x + PAD.w / 2 - 16, PAD.y + PAD.h + 153);
   ctx.textAlign = 'left';
   // Intro card.
   if (c.phase === 'intro') {

@@ -3,7 +3,7 @@
 // history, and the victory and defeat screens. Each draw function registers
 // its buttons into g.buttons so one click router in main.js serves them all.
 
-import { BOSSES, COMBOS, ELEMENTS, ELEMENT_BY_ID, UPGRADES, comboPartner, combosFrom, findCombo } from './config.js';
+import { BLESSING_BY_ID, BOSSES, COMBOS, DIFFICULTIES, DIFFICULTY_BY_ID, ELEMENTS, ELEMENT_BY_ID, FEATS, FEAT_BY_ID, ROADS, UPGRADES, campaignGrade, comboPartner, combosFrom, findCombo } from './config.js';
 import { drawBoss, drawBrushStroke, drawFrame, drawSeal } from './sprites.js';
 import { burst, drawParticles, floatText, makeParticles, ring, updateParticles } from './particles.js';
 import { recognise, isRealStroke } from './strokes.js';
@@ -63,9 +63,12 @@ function formatTime(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-// --- Menu: dense, full of ink art, no empty space. ---
+// --- Menu: a dashboard, not a lobby. The goal strip, a 3-step how-to,
+// the seven bosses, difficulty cards, content chips, discovered combos
+// as ink seals, the last run, and the next unsealed boss — all tied to
+// the campaign, with slow auto-drawn kanji drifting behind it all.
 export function drawMenu(ctx, g, time) {
-  const { progress } = g;
+  const { progress, codex, feats } = g;
   // Ink mountains + red sun.
   ctx.fillStyle = 'rgba(43, 33, 24, 0.10)';
   ctx.beginPath();
@@ -83,7 +86,7 @@ export function drawMenu(ctx, g, time) {
   ctx.fill();
   ctx.fillStyle = '#c1271b';
   ctx.beginPath();
-  ctx.arc(830, 120, 44, 0, Math.PI * 2);
+  ctx.arc(880, 118, 30, 0, Math.PI * 2);
   ctx.fill();
   // Bamboo stalks at the edges.
   for (const bx of [44, 66, 958, 980]) {
@@ -103,50 +106,281 @@ export function drawMenu(ctx, g, time) {
       ctx.stroke();
     }
   }
-  // Title.
+  // Slow auto-drawn kanji drifting across the background: giant faint
+  // glyphs plus two brush strokes that draw themselves on a loop.
+  ctx.save();
+  ctx.globalAlpha = 0.05;
+  ctx.font = '700 120px "Noto Serif JP", serif';
+  ctx.textAlign = 'center';
+  const driftKanji = [ELEMENTS[0], ELEMENTS[1], ELEMENTS[2]];
+  driftKanji.forEach((e, i) => {
+    const x = (((i * 430 + 120 - time * 10) % 1250) + 1250) % 1250 - 100;
+    ctx.fillStyle = e.color;
+    ctx.fillText(e.kanji, x, 150 + i * 190);
+  });
+  ctx.restore();
+  ctx.save();
+  ctx.globalAlpha = 0.09;
+  ctx.lineCap = 'round';
+  const driftStrokes = [
+    { el: ELEMENTS[0], x: 120, y: 250, s: 170 },
+    { el: ELEMENTS[3], x: 830, y: 300, s: 150 },
+  ];
+  driftStrokes.forEach(({ el, x, y, s }, i) => {
+    const stroke = el.strokes[0];
+    ctx.strokeStyle = el.color;
+    ctx.lineWidth = 6;
+    ctx.setLineDash([320, 320]);
+    ctx.lineDashOffset = -((time * 36 + i * 240) % 640);
+    ctx.beginPath();
+    stroke.forEach(([sx, sy], j) => {
+      const px = x + sx * s;
+      const py = y + sy * s;
+      if (j === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+  });
+  ctx.restore();
+  // GOAL / WIN / LOSE strip.
+  ctx.fillStyle = 'rgba(43, 33, 24, 0.88)';
+  ctx.beginPath();
+  ctx.roundRect(20, 58, 984, 24, 8);
+  ctx.fill();
+  ctx.font = '700 13px Georgia, serif';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffd43b';
+  ctx.fillText('🎯 GOAL — seal all 7 scrolls', 32, 75);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#69db7c';
+  ctx.fillText('✓ WIN — seal the boss', 512, 75);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#ff8787';
+  ctx.fillText('✗ LOSE — HP reaches 0', 992, 75);
+  // Title (compact: the dashboard needs the room).
   ctx.textAlign = 'center';
   ctx.fillStyle = '#2b2118';
-  ctx.font = '700 92px "Noto Serif JP", serif';
-  ctx.fillText('墨刃', 512, 158);
-  ctx.font = '700 54px Georgia, serif';
-  ctx.fillText('INKBLADE', 512, 222);
-  ctx.font = 'italic 17px Georgia, serif';
-  ctx.fillStyle = '#6b5a44';
-  ctx.fillText('Draw the kanji. Cast the magic. Seal all seven scrolls.', 512, 252);
+  ctx.font = '700 60px "Noto Serif JP", serif';
+  ctx.fillText('墨刃', 512, 130);
+  ctx.font = '700 36px Georgia, serif';
+  ctx.fillText('INKBLADE', 512, 164);
+  drawSeal(ctx, 120, 118, 44, '墨', 0.9);
   // Element strip: all eight kanji, coloured.
-  ctx.font = '700 30px "Noto Serif JP", serif';
+  ctx.font = '700 22px "Noto Serif JP", serif';
   ELEMENTS.forEach((e, i) => {
     const x = 512 - 245 + i * 70;
     ctx.fillStyle = e.color;
-    ctx.fillText(e.kanji, x, 296);
+    ctx.fillText(e.kanji, x, 194);
+    ctx.fillStyle = '#6b5a44';
+    ctx.font = '700 9px Georgia, serif';
+    ctx.fillText(e.name.toUpperCase(), x, 208);
+    ctx.font = '700 22px "Noto Serif JP", serif';
+  });
+  // How-to: three illustrated steps.
+  const steps = [
+    { num: '1', title: 'DRAW the kanji', sub: 'in the ink pad to cast', draw: (x, y) => {
+      ctx.strokeStyle = '#2b2118';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 10, y + 10, 36, 36);
+      ctx.strokeStyle = '#e8590c';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x + 28, y + 16);
+      ctx.lineTo(x + 28, y + 26);
+      ctx.moveTo(x + 28, y + 30);
+      ctx.lineTo(x + 18, y + 42);
+      ctx.moveTo(x + 28, y + 30);
+      ctx.lineTo(x + 38, y + 42);
+      ctx.stroke();
+    } },
+    { num: '2', title: 'FUSE combos', sub: 'two elements, one spell', draw: (x, y) => {
+      ctx.font = '700 20px "Noto Serif JP", serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#e8590c';
+      ctx.fillText('火', x + 20, y + 34);
+      ctx.fillStyle = '#2b2118';
+      ctx.font = '700 13px Georgia, serif';
+      ctx.fillText('+', x + 36, y + 32);
+      ctx.fillStyle = '#2b8a3e';
+      ctx.font = '700 20px "Noto Serif JP", serif';
+      ctx.fillText('風', x + 52, y + 34);
+      ctx.fillStyle = '#2b2118';
+      ctx.font = '700 13px Georgia, serif';
+      ctx.fillText('→', x + 68, y + 32);
+      ctx.fillStyle = '#e8590c';
+      ctx.font = '700 20px "Noto Serif JP", serif';
+      ctx.fillText('炎嵐', x + 100, y + 34);
+    } },
+    { num: '3', title: 'SEAL the scroll', sub: 'beat the boss, claim the seal', draw: (x, y) => {
+      drawSeal(ctx, x + 28, y + 28, 34, '封', 1);
+    } },
+  ];
+  steps.forEach((s, i) => {
+    const x = 20 + i * 332;
+    const y = 220;
+    ctx.fillStyle = '#fdf6e3';
+    ctx.beginPath();
+    ctx.roundRect(x, y, 320, 56, 10);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(176, 42, 30, 0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#b02a1e';
+    ctx.beginPath();
+    ctx.arc(x + 14, y + 14, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fdf6e3';
+    ctx.font = '700 12px Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(s.num, x + 14, y + 18);
+    ctx.save();
+    ctx.translate(0, 0);
+    s.draw(x + 28, y);
+    ctx.restore();
+    ctx.fillStyle = '#2b2118';
+    ctx.font = '700 13px Georgia, serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(s.title, x + 150, y + 24);
+    ctx.fillStyle = '#6b5a44';
+    ctx.font = 'italic 11px Georgia, serif';
+    ctx.fillText(s.sub, x + 150, y + 42);
+  });
+  // Boss strip: all seven bosses, sealed state visible at a glance.
+  const nextIdx = BOSSES.findIndex((b) => b.scroll <= progress.unlockedScroll && !(codex[b.id] && codex[b.id].wins > 0));
+  BOSSES.forEach((boss, i) => {
+    const x = 20 + i * 140;
+    const y = 284;
+    const el = ELEMENT_BY_ID[boss.element];
+    const cleared = codex[boss.id] && codex[boss.id].wins > 0;
+    const locked = boss.scroll > progress.unlockedScroll;
+    const isNext = i === nextIdx;
+    ctx.fillStyle = locked ? '#e9e2d2' : '#fdf6e3';
+    ctx.beginPath();
+    ctx.roundRect(x, y, 132, 60, 10);
+    ctx.fill();
+    ctx.strokeStyle = isNext ? '#ffd43b' : (cleared ? '#2b8a3e' : 'rgba(43, 33, 24, 0.3)');
+    ctx.lineWidth = isNext ? 3 : 1.5;
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = locked ? '#868e96' : el.color;
+    ctx.font = '700 22px "Noto Serif JP", serif';
+    ctx.fillText(locked ? '？' : el.kanji, x + 66, y + 26);
+    ctx.fillStyle = locked ? '#868e96' : '#2b2118';
+    ctx.font = '700 11px Georgia, serif';
+    ctx.fillText(boss.name, x + 66, y + 43);
+    ctx.font = '700 9px Georgia, serif';
+    if (cleared) {
+      ctx.fillStyle = '#2b8a3e';
+      ctx.fillText('✓ SEALED', x + 66, y + 55);
+    } else if (isNext) {
+      ctx.fillStyle = '#b58900';
+      ctx.fillText('NEXT →', x + 66, y + 55);
+    } else if (locked) {
+      ctx.fillStyle = '#868e96';
+      ctx.fillText(`SCROLL ${boss.scroll} · LOCKED`, x + 66, y + 55);
+    } else {
+      ctx.fillStyle = '#6b5a44';
+      ctx.fillText(`SCROLL ${boss.scroll}`, x + 66, y + 55);
+    }
+  });
+  // Difficulty cards + PLAY.
+  DIFFICULTIES.forEach((d, i) => {
+    const x = 20 + i * 170;
+    const y = 352;
+    const selected = progress.difficulty === d.id;
+    ctx.fillStyle = selected ? '#fdf6e3' : 'rgba(253, 246, 227, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, 162, 56, 10);
+    ctx.fill();
+    ctx.strokeStyle = selected ? '#ffd43b' : d.color;
+    ctx.lineWidth = selected ? 3 : 1.5;
+    ctx.stroke();
+    ctx.fillStyle = d.color;
+    ctx.font = '700 24px "Noto Serif JP", serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(d.kanji, x + 10, y + 34);
+    ctx.fillStyle = '#2b2118';
+    ctx.font = '700 13px Georgia, serif';
+    ctx.fillText(d.name, x + 42, y + 22);
     ctx.fillStyle = '#6b5a44';
     ctx.font = '700 10px Georgia, serif';
-    ctx.fillText(e.name.toUpperCase(), x, 314);
-    ctx.font = '700 30px "Noto Serif JP", serif';
+    ctx.fillText(`HP x${d.bossHpMul} · Score x${d.scoreMul}`, x + 42, y + 39);
+    if (selected) {
+      ctx.fillStyle = '#b58900';
+      ctx.font = '700 14px Georgia, serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('✓', x + 154, y + 20);
+    }
+    registerButton(g, `diff-${d.id}`, x, y, 162, 56);
   });
-  // Buttons.
-  const bw = 260, bh = 44, bx = 512 - bw / 2;
-  drawButton(ctx, g, 'play', bx, 330, bw, bh, '▶  PLAY — CONTINUE', { fill: '#b02a1e', font: '700 18px Georgia, serif' });
-  drawButton(ctx, g, 'scrolls', 382, 382, 126, 40, 'SCROLLS', { font: '700 14px Georgia, serif' });
-  drawButton(ctx, g, 'dojo', 516, 382, 126, 40, 'DOJO', { font: '700 14px Georgia, serif' });
-  drawButton(ctx, g, 'tutorial', 382, 430, 126, 40, 'TUTORIAL', { font: '700 14px Georgia, serif' });
-  drawButton(ctx, g, 'combos', 516, 430, 126, 40, 'COMBOS', { font: '700 14px Georgia, serif' });
-  drawButton(ctx, g, 'codex', 180, 486, 150, 36, 'CODEX', { fill: '#6b5a44', font: '700 13px Georgia, serif' });
-  drawButton(ctx, g, 'rank', 342, 486, 150, 36, 'RANK', { fill: '#6b5a44', font: '700 13px Georgia, serif' });
-  drawButton(ctx, g, 'leaderboard', 504, 486, 150, 36, 'LEADERBOARD', { fill: '#6b5a44', font: '700 13px Georgia, serif' });
-  drawButton(ctx, g, 'history', 666, 486, 150, 36, 'HISTORY', { fill: '#6b5a44', font: '700 13px Georgia, serif' });
+  drawButton(ctx, g, 'play', 560, 352, 444, 56, g.runStarted ? '▶  PLAY — CONTINUE' : '▶  PLAY — NEW STORY', { fill: '#b02a1e', font: '700 20px Georgia, serif' });
+  // Content chips + discovered combos as ink seals.
+  const chips = [
+    '8 ELEMENTS', '7 BOSSES', '6 COMBOS', '17 RANKS', `FEATS ${feats.length}/${FEATS.length}`,
+  ];
+  let chipX = 20;
+  ctx.font = '700 11px Georgia, serif';
+  chips.forEach((label) => {
+    const w = ctx.measureText(label).width + 22;
+    ctx.fillStyle = 'rgba(43, 33, 24, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(chipX, 416, w, 28, 14);
+    ctx.fill();
+    ctx.fillStyle = label.startsWith('FEATS') ? '#ffd43b' : '#f6efdd';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, chipX + w / 2, 435);
+    chipX += w + 8;
+  });
+  // Discovered combos, stamped as small red seals.
+  const discovered = COMBOS.filter((c) => progress.combosDiscovered.includes(c.id));
+  if (discovered.length > 0) {
+    ctx.fillStyle = '#6b5a44';
+    ctx.font = 'italic 11px Georgia, serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Combos:', chipX + 4, 435);
+    chipX += 62;
+    discovered.forEach((c) => {
+      ctx.fillStyle = '#c1271b';
+      ctx.beginPath();
+      ctx.roundRect(chipX, 417, 32, 26, 5);
+      ctx.fill();
+      ctx.fillStyle = '#fdf6e3';
+      ctx.font = '700 13px "Noto Serif JP", serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(c.kanji, chipX + 16, 435);
+      chipX += 38;
+    });
+  }
+  // Last-run line + next boss.
+  const nextBoss = nextIdx >= 0 ? BOSSES[nextIdx] : null;
+  ctx.fillStyle = '#2b2118';
+  ctx.font = '700 13px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(
+    `Last run — Best ${progress.bestScore} · Furthest Scroll ${progress.furthestScroll || '—'} · Last grade ${progress.lastGrade || '—'}   ·   Next: ${nextBoss ? `Scroll ${nextBoss.scroll} — ${nextBoss.name} (${ELEMENT_BY_ID[nextBoss.element].kanji})` : 'all scrolls sealed — try Grand Master!'}`,
+    512, 462,
+  );
+  // Secondary buttons: one row of eight.
+  const secondary = [
+    ['scrolls', 'SCROLLS'], ['dojo', 'DOJO'], ['tutorial', 'TUTORIAL'], ['combos', 'COMBOS'],
+    ['codex', 'CODEX'], ['rank', 'RANK'], ['leaderboard', 'LEADERBOARD'], ['history', 'HISTORY'],
+  ];
+  secondary.forEach(([id, label], i) => {
+    drawButton(ctx, g, id, 20 + i * 124, 478, 116, 34, label, { fill: '#6b5a44', font: '700 12px Georgia, serif' });
+  });
   // Bottom stats bar.
   ctx.fillStyle = 'rgba(43, 33, 24, 0.85)';
   ctx.beginPath();
-  ctx.roundRect(180, 536, 664, 26, 8);
+  ctx.roundRect(180, 524, 664, 26, 8);
   ctx.fill();
   ctx.fillStyle = '#f6efdd';
   ctx.font = '700 12px Georgia, serif';
+  ctx.textAlign = 'center';
   ctx.fillText(
     `Best score ${progress.bestScore}  ·  Scrolls unlocked ${progress.unlockedScroll}/7  ·  Campaigns sealed ${progress.campaignWins}  ·  M mute · P pause · WASD move · 1–8 pick element`,
-    512, 553,
+    512, 541,
   );
-  drawSeal(ctx, 150, 120, 56, '墨', 0.9);
   drawRankChip(ctx, g);
 }
 
@@ -292,6 +526,32 @@ export function drawScrolls(ctx, g) {
   drawBackButton(ctx, g);
 }
 
+// The next-scroll preview: what waits after this screen. On the final
+// scroll it names the dragon instead.
+function drawNextScrollPanel(ctx, g, x, y, w, h) {
+  const nextIndex = g.run.scrollIndex + 1;
+  if (nextIndex > 6) return;
+  const boss = BOSSES[nextIndex];
+  const el = ELEMENT_BY_ID[boss.element];
+  const weak = ELEMENT_BY_ID[boss.weakness];
+  const diff = DIFFICULTY_BY_ID[g.run.difficulty] ?? DIFFICULTY_BY_ID.calligrapher;
+  const isFinal = nextIndex === 6;
+  ctx.fillStyle = 'rgba(43, 33, 24, 0.88)';
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 8);
+  ctx.fill();
+  ctx.fillStyle = isFinal ? '#ffd43b' : '#f6efdd';
+  ctx.font = '700 13px Georgia, serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(isFinal ? `FINAL SCROLL — ${boss.name}, the dragon awaits` : `NEXT: Scroll ${boss.scroll} — ${boss.name}`, x + 12, y + 18);
+  ctx.fillStyle = '#d9c9a8';
+  ctx.font = '12px Georgia, serif';
+  ctx.fillText(`${el.kanji} ${el.name} · Weak: ${weak.kanji} ${weak.name} · HP ${Math.round(boss.hp * diff.bossHpMul)}`, x + 12, y + 36);
+  ctx.fillStyle = '#d9c9a8';
+  ctx.font = 'italic 11px Georgia, serif';
+  ctx.fillText(boss.tip, x + 12, y + 52);
+}
+
 // --- Shop: spend essence between scrolls. ---
 export function drawShop(ctx, g) {
   drawHeader(ctx, 'THE INK MERCHANT', 'Spend essence before the next scroll. Upgrades last for this campaign.');
@@ -333,7 +593,123 @@ export function drawShop(ctx, g) {
     });
   });
   drawButton(ctx, g, 'next-scroll', 674, 520, 330, 42, 'NEXT SCROLL  →', { fill: '#b02a1e', font: '700 17px Georgia, serif' });
+  drawNextScrollPanel(ctx, g, 30, 452, 620, 64);
   drawBackButton(ctx, g);
+}
+
+// --- Blessing draft: pick 1 of 3 free cards between scrolls. ---
+export function drawDraft(ctx, g) {
+  drawHeader(ctx, 'CHOOSE A BLESSING — PICK 1 OF 3', 'Free. The blessing lasts for the rest of this campaign.');
+  const { run, draft } = g;
+  if (!draft) {
+    ctx.fillStyle = '#2b2118';
+    ctx.font = '700 18px Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No blessing is waiting.', 512, 300);
+    drawBackButton(ctx, g);
+    return;
+  }
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#2b2118';
+  ctx.font = '700 18px Georgia, serif';
+  ctx.fillText(`Essence: ${run.essence}`, 34, 122);
+  const cost = 20 * (draft.rerolls + 1);
+  draft.cards.forEach((blessingId, i) => {
+    const b = BLESSING_BY_ID[blessingId];
+    const x = 30 + i * 322;
+    const y = 140;
+    const rare = b.rarity === 'RARE';
+    ctx.fillStyle = '#fdf6e3';
+    ctx.beginPath();
+    ctx.roundRect(x, y, 300, 270, 14);
+    ctx.fill();
+    ctx.strokeStyle = rare ? '#b58900' : '#b02a1e';
+    ctx.lineWidth = rare ? 3 : 2;
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = rare ? '#b58900' : '#868e96';
+    ctx.font = '700 12px Georgia, serif';
+    ctx.fillText(b.rarity, x + 150, y + 30);
+    ctx.fillStyle = '#2b2118';
+    ctx.font = '700 56px "Noto Serif JP", serif';
+    ctx.fillText(b.icon, x + 150, y + 108);
+    ctx.font = '700 22px Georgia, serif';
+    ctx.fillText(b.name, x + 150, y + 150);
+    ctx.fillStyle = '#6b5a44';
+    ctx.font = '15px Georgia, serif';
+    ctx.fillText(b.desc, x + 150, y + 180);
+    if (b.tradeoff) {
+      ctx.fillStyle = '#c1271b';
+      ctx.font = '700 13px Georgia, serif';
+      ctx.fillText('⚠ TRADE-OFF', x + 150, y + 208);
+    }
+    drawButton(ctx, g, `draft-pick-${i}`, x + 60, y + 222, 180, 34, 'PICK', { fill: rare ? '#b58900' : '#b02a1e', font: '700 15px Georgia, serif' });
+  });
+  const canReroll = run.essence >= cost;
+  drawButton(ctx, g, 'draft-reroll', 362, 440, 300, 44, `REROLL — ${cost} essence`, {
+    fill: canReroll ? '#2b2118' : '#868e96', font: '700 16px Georgia, serif', disabled: !canReroll,
+  });
+  ctx.fillStyle = '#6b5a44';
+  ctx.font = 'italic 13px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(
+    draft.rerolls > 0
+      ? `Rerolled ${draft.rerolls} time${draft.rerolls > 1 ? 's' : ''} — the next reroll costs ${20 * (draft.rerolls + 2)} essence.`
+      : 'Not feeling these three? Reroll for a fresh hand — the price rises each time.',
+    512, 512,
+  );
+}
+
+// --- Road choice: two paths to the next scroll. ---
+export function drawRoads(ctx, g) {
+  const nextIndex = Math.min(6, g.run.scrollIndex + 1);
+  const boss = BOSSES[nextIndex];
+  const el = ELEMENT_BY_ID[boss.element];
+  const weak = ELEMENT_BY_ID[boss.weakness];
+  const diff = DIFFICULTY_BY_ID[g.run.difficulty] ?? DIFFICULTY_BY_ID.calligrapher;
+  drawHeader(ctx, `THE ROAD TO SCROLL ${boss.scroll} — ${boss.name}`, boss.title);
+  // The boss waiting at the end of the road.
+  ctx.fillStyle = 'rgba(43, 33, 24, 0.88)';
+  ctx.beginPath();
+  ctx.roundRect(30, 100, 964, 52, 10);
+  ctx.fill();
+  ctx.fillStyle = el.color;
+  ctx.font = '700 28px "Noto Serif JP", serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(el.kanji, 48, 136);
+  ctx.fillStyle = '#f6efdd';
+  ctx.font = '700 16px Georgia, serif';
+  ctx.fillText(`${boss.name} — ${el.name} · Weak: ${weak.kanji} ${weak.name} · HP ${Math.round(boss.hp * diff.bossHpMul)}`, 92, 122);
+  ctx.fillStyle = '#d9c9a8';
+  ctx.font = 'italic 13px Georgia, serif';
+  ctx.fillText(boss.tip, 92, 142);
+  ROADS.forEach((road, i) => {
+    const x = 30 + i * 492;
+    const y = 172;
+    ctx.fillStyle = '#fdf6e3';
+    ctx.beginPath();
+    ctx.roundRect(x, y, 472, 260, 14);
+    ctx.fill();
+    ctx.strokeStyle = '#b02a1e';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#2b2118';
+    ctx.font = '700 64px "Noto Serif JP", serif';
+    ctx.fillText(road.icon, x + 236, y + 96);
+    ctx.font = '700 24px Georgia, serif';
+    ctx.fillText(road.name, x + 236, y + 140);
+    ctx.fillStyle = '#c1271b';
+    ctx.font = '700 15px Georgia, serif';
+    ctx.fillText(`RISK — ${road.risk}`, x + 236, y + 176);
+    ctx.fillStyle = '#2b8a3e';
+    ctx.fillText(`REWARD — ${road.reward}`, x + 236, y + 202);
+    drawButton(ctx, g, `road-${road.id}`, x + 136, y + 222, 200, 34, 'TAKE THIS ROAD', { fill: '#b02a1e', font: '700 14px Georgia, serif' });
+  });
+  ctx.fillStyle = '#6b5a44';
+  ctx.font = 'italic 13px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('The road changes the fight ahead — not the scroll. Choose wisely.', 512, 470);
 }
 
 // --- Dojo: practice drawing each kanji with guides and accuracy feedback. ---
@@ -674,9 +1050,14 @@ export function drawHistory(ctx, g) {
 // --- Victory: the scroll stamped, the stats, the spoils. ---
 export function drawVictory(ctx, g, time) {
   const v = g.lastResult;
+  if (v.campaignComplete) {
+    drawCampaignVictory(ctx, g, time);
+    return;
+  }
   const boss = BOSSES[v.scrollIndex];
   const el = ELEMENT_BY_ID[boss.element];
-  drawHeader(ctx, `SCROLL ${boss.scroll} SEALED`, `${boss.name} — ${boss.title}`);
+  const diff = DIFFICULTY_BY_ID[g.run.difficulty] ?? DIFFICULTY_BY_ID.calligrapher;
+  drawHeader(ctx, `SCROLL ${boss.scroll} SEALED`, `${boss.name} — ${boss.title} · ${diff.name}`);
   // The scroll itself.
   ctx.fillStyle = '#fdf6e3';
   ctx.beginPath();
@@ -788,13 +1169,177 @@ export function drawVictory(ctx, g, time) {
   ctx.fillStyle = '#ffe066';
   ctx.font = '700 15px Georgia, serif';
   ctx.fillText(`Total score ${g.run.score}  ·  Essence ${g.run.essence}`, 676, 444);
-  if (v.campaignComplete) {
-    drawButton(ctx, g, 'play-again', 652, 480, 310, 44, 'PLAY AGAIN — NEW STORY', { fill: '#b02a1e', font: '700 16px Georgia, serif' });
-  } else {
-    drawButton(ctx, g, 'shop', 652, 480, 148, 44, 'SHOP', { fill: '#b02a1e' });
-    drawButton(ctx, g, 'next-scroll', 814, 480, 148, 44, 'NEXT →', { fill: '#2b8a3e' });
+  // (Campaign victories return early to drawCampaignVictory above.)
+  drawButton(ctx, g, 'shop', 652, 480, 148, 44, 'SHOP', { fill: '#b02a1e' });
+  drawButton(ctx, g, 'next-scroll', 814, 480, 148, 44, 'NEXT →', { fill: '#2b8a3e' });
+  // Feats strip: the running total plus this fight's NEW unlocks.
+  {
+    const newFeatNames = g.newFeats.map((id) => FEAT_BY_ID[id]?.name).filter(Boolean);
+    ctx.fillStyle = 'rgba(43, 33, 24, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(170, 476, 452, 28, 8);
+    ctx.fill();
+    ctx.font = '700 12px Georgia, serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffd43b';
+    const totalText = `★ FEATS ${g.feats.length}/${FEATS.length}`;
+    ctx.fillText(totalText, 182, 495);
+    if (newFeatNames.length > 0) {
+      const shown = newFeatNames.slice(0, 2);
+      const extra = newFeatNames.length - shown.length;
+      ctx.fillStyle = '#69db7c';
+      ctx.fillText(`NEW: ${shown.join(', ')}${extra > 0 ? ` +${extra} more` : ''}`, 182 + ctx.measureText(totalText).width + 14, 495);
+    }
   }
+  drawNextScrollPanel(ctx, g, 170, 510, 452, 58);
   drawBackButton(ctx, g);
+}
+
+// --- Campaign victory: the full dashboard. The big campaign grade, a
+// per-scroll grade row, a score-by-scroll bar chart, the feats earned
+// this run, and the next goal.
+function drawCampaignVictory(ctx, g, time) {
+  const v = g.lastResult;
+  const diff = DIFFICULTY_BY_ID[g.run.difficulty] ?? DIFFICULTY_BY_ID.calligrapher;
+  const grades = g.run.scrollGrades ?? [];
+  const scores = g.run.scrollScores ?? [];
+  const campGrade = campaignGrade(grades);
+  const gradeColors = { S: '#e67700', A: '#2b8a3e', B: '#1971c2', C: '#868e96' };
+  drawHeader(ctx, 'THE STORY IS COMPLETE', 'All seven scrolls sealed — the dragon is bound in ink.');
+  // Left panel: the big grade, the totals, the rank-up, the next goal.
+  ctx.fillStyle = '#fdf6e3';
+  ctx.beginPath();
+  ctx.roundRect(20, 96, 380, 320, 12);
+  ctx.fill();
+  ctx.strokeStyle = gradeColors[campGrade];
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  const pulse = 1 + Math.sin(time * 3) * 0.04;
+  ctx.save();
+  ctx.translate(210, 168);
+  ctx.scale(pulse, pulse);
+  ctx.fillStyle = gradeColors[campGrade];
+  ctx.beginPath();
+  ctx.arc(0, 0, 46, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fdf6e3';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.fillStyle = '#fdf6e3';
+  ctx.font = '700 48px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(campGrade, 0, 2);
+  ctx.restore();
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#6b5a44';
+  ctx.font = '700 13px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('CAMPAIGN GRADE', 210, 232);
+  ctx.fillStyle = '#2b2118';
+  ctx.font = '700 22px Georgia, serif';
+  ctx.fillText(`Total score ${g.run.score}`, 210, 268);
+  ctx.fillStyle = '#6b5a44';
+  ctx.font = 'italic 13px Georgia, serif';
+  ctx.fillText(`Sealed on ${diff.name}  ·  ${v.casts} casts this fight`, 210, 290);
+  if (v.rankUp) {
+    ctx.fillStyle = v.rankUp.sealColor;
+    ctx.font = '700 16px Georgia, serif';
+    ctx.fillText(`★ RANK UP! You are now ${v.rankUp.name}`, 210, 318);
+  }
+  const nextGoal = g.run.difficulty !== 'master'
+    ? 'NEXT GOAL — seal all 7 scrolls on Grand Master'
+    : (g.feats.length < FEATS.length
+      ? `NEXT GOAL — earn all ${FEATS.length} feats (${g.feats.length}/${FEATS.length})`
+      : 'NEXT GOAL — you are a Grand Calligrapher. The story is yours.');
+  ctx.fillStyle = '#b02a1e';
+  ctx.font = '700 14px Georgia, serif';
+  ctx.fillText(nextGoal, 210, 396);
+  // Right panel: per-scroll grades + score bar chart.
+  ctx.fillStyle = '#2b2118';
+  ctx.beginPath();
+  ctx.roundRect(416, 96, 588, 320, 12);
+  ctx.fill();
+  ctx.fillStyle = '#f6efdd';
+  ctx.font = '700 16px Georgia, serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('PER-SCROLL GRADES', 440, 126);
+  BOSSES.forEach((boss, i) => {
+    const x = 440 + i * 80;
+    const el = ELEMENT_BY_ID[boss.element];
+    const grade = grades[i] || '–';
+    ctx.fillStyle = el.color;
+    ctx.font = '700 26px "Noto Serif JP", serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(el.kanji, x + 32, 164);
+    ctx.fillStyle = grade === '–' ? '#868e96' : (gradeColors[grade] || '#868e96');
+    ctx.beginPath();
+    ctx.arc(x + 32, 192, 15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fdf6e3';
+    ctx.font = '700 16px Georgia, serif';
+    ctx.fillText(grade, x + 32, 198);
+    ctx.fillStyle = '#d9c9a8';
+    ctx.font = '700 10px Georgia, serif';
+    ctx.fillText(boss.name.toUpperCase(), x + 32, 222);
+  });
+  ctx.fillStyle = '#f6efdd';
+  ctx.font = '700 16px Georgia, serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('SCORE BY SCROLL', 440, 252);
+  const maxScore = Math.max(1, ...scores);
+  const baseY = 392;
+  BOSSES.forEach((boss, i) => {
+    const x = 440 + i * 80;
+    const s = scores[i] ?? 0;
+    const h = Math.max(4, Math.round((s / maxScore) * 110));
+    ctx.fillStyle = ELEMENT_BY_ID[boss.element].color;
+    ctx.fillRect(x + 8, baseY - h, 48, h);
+    ctx.fillStyle = '#f6efdd';
+    ctx.font = '700 11px Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(s), x + 32, baseY - h - 6);
+    ctx.fillStyle = '#d9c9a8';
+    ctx.font = '700 10px Georgia, serif';
+    ctx.fillText(`S${boss.scroll}`, x + 32, baseY + 14);
+  });
+  // Feats earned this run.
+  ctx.fillStyle = 'rgba(43, 33, 24, 0.85)';
+  ctx.beginPath();
+  ctx.roundRect(20, 428, 984, 56, 10);
+  ctx.fill();
+  ctx.fillStyle = '#ffd43b';
+  ctx.font = '700 13px Georgia, serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`FEATS EARNED THIS RUN  ·  ${g.feats.length}/${FEATS.length} overall`, 36, 450);
+  const earned = (g.run.featsEarned ?? []).map((id) => FEAT_BY_ID[id]).filter(Boolean);
+  if (earned.length === 0) {
+    ctx.fillStyle = '#d9c9a8';
+    ctx.font = 'italic 12px Georgia, serif';
+    ctx.fillText('No new feats this run — the deeds are waiting.', 36, 470);
+  } else {
+    let fx = 36;
+    ctx.font = '700 12px Georgia, serif';
+    earned.slice(0, 5).forEach((f) => {
+      const label = `${f.icon} ${f.name}`;
+      const w = ctx.measureText(label).width + 20;
+      ctx.fillStyle = '#2b8a3e';
+      ctx.beginPath();
+      ctx.roundRect(fx, 458, w, 20, 10);
+      ctx.fill();
+      ctx.fillStyle = '#fdf6e3';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, fx + w / 2, 472);
+      fx += w + 8;
+    });
+    if (earned.length > 5) {
+      ctx.fillStyle = '#d9c9a8';
+      ctx.textAlign = 'left';
+      ctx.fillText(`+${earned.length - 5} more`, fx, 472);
+    }
+  }
+  drawButton(ctx, g, 'play-again', 192, 496, 300, 44, 'PLAY AGAIN — NEW STORY', { fill: '#b02a1e', font: '700 16px Georgia, serif' });
+  drawButton(ctx, g, 'menu', 532, 496, 300, 44, 'MENU', { fill: '#6b5a44', font: '700 16px Georgia, serif' });
 }
 
 // --- Defeat: the record, and the choice to rewrite it. ---

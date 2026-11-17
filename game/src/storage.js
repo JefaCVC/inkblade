@@ -7,6 +7,7 @@ const KEYS = {
   history: 'inkblade_history_v1',
   codex: 'inkblade_codex_v1',
   progress: 'inkblade_progress_v1',
+  feats: 'inkblade_feats_v1',
 };
 
 function read(key, fallback) {
@@ -70,9 +71,15 @@ export function loadProgress() {
     unlockedScroll: 1, bestScore: 0, campaignWins: 0,
     rankPoints: 0, rankIndex: 0, brushStyle: 'standard', inkColor: 'black',
     combosDiscovered: [],
+    difficulty: 'calligrapher',
+    bestScores: { student: 0, calligrapher: 0, master: 0 },
+    totalCasts: 0, furthestScroll: 0, lastGrade: null,
   };
   const saved = read(KEYS.progress, {});
-  return { ...defaults, ...(saved && typeof saved === 'object' ? saved : {}) };
+  const merged = { ...defaults, ...(saved && typeof saved === 'object' ? saved : {}) };
+  // Old saves lack bestScores (or have a partial one); fill any gaps.
+  merged.bestScores = { ...defaults.bestScores, ...(merged.bestScores ?? {}) };
+  return merged;
 }
 
 export function saveProgress(progress) {
@@ -86,4 +93,18 @@ export function recordComboDiscovered(progress, comboId) {
     return true;
   }
   return false;
+}
+
+// --- Feats: the list of unlocked feat ids, persisted across runs. ---
+export function loadFeats() {
+  const rows = read(KEYS.feats, []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+export function unlockFeat(featId) {
+  const feats = loadFeats();
+  if (feats.includes(featId)) return false;
+  feats.push(featId);
+  write(KEYS.feats, feats);
+  return true;
 }
