@@ -101,6 +101,8 @@ function startFight(scrollIndex) {
   g.run.scrollIndex = scrollIndex;
   g.runStarted = true;
   g.newFeats = [];
+  // The fight's seal strip reads the combos this profile has discovered.
+  g.run.combosDiscovered = g.progress.combosDiscovered;
   g.combat = createCombat(scrollIndex, g.run, {
     // recordComboDiscovered mutates + saves in place and returns a boolean;
     // it is not an assignment.

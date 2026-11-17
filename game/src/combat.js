@@ -3,7 +3,7 @@
 // cast elemental spells. Bosses have distinct attack patterns, phases and a
 // weakness; spells interact with the elemental wheel, combos and ink.
 
-import { ARENA, BANNER, BOSSES, CAST_PAUSE_MS, COMBO, COMBOS, DIFFICULTY_BY_ID, ELEMENTS, ELEMENT_BY_ID, INK, MINIONS, PAD, PERFECT_THRESHOLD, PLAYER, STRONG_AGAINST, WINLOSE_STRIP, comboPartner, combosFrom, effectiveness, findCombo } from './config.js';
+import { ARENA, BANNER, BATTLE_RECORD_PANEL, BOSSES, CAST_PAUSE_MS, COMBO, COMBOS, DIFFICULTY_BY_ID, ELEMENTS, ELEMENT_BY_ID, FUSION_SEALS_PANEL, INK, MINIONS, PAD, PERFECT_THRESHOLD, PLAYER, STRONG_AGAINST, WINLOSE_STRIP, comboPartner, combosFrom, effectiveness, findCombo } from './config.js';
 import { drawBoss, drawBrushStroke, drawPlayer, drawSeal } from './sprites.js';
 import { burst, floatText, makeParticles, ring, spellBurst, trail, updateParticles, drawParticles } from './particles.js';
 import { recognise, isRealStroke } from './strokes.js';
@@ -48,6 +48,12 @@ export function createCombat(scrollIndex, run, hooks = {}) {
     projectiles: [], summons: [], spells: [], telegraphs: [], pools: [],
     particles: makeParticles(),
     stats: { casts: 0, combos: 0, hits: 0, perfects: 0, damage: 0, damageTaken: 0, maxCombo: 0, accuracySum: 0, startTime: 0 },
+    // The bottom row's data: a rolling log of real fight events (kept at
+    // 5, the number of lines the panel shows) and the fusion combos this
+    // profile has discovered so far (seeded from the saved progress; a
+    // combo fused mid-fight joins the set live in castCombo).
+    battleLog: [],
+    discoveredCombos: new Set(run.combosDiscovered ?? []),
     castFeedback: null,
     essenceEarned: 0,
     won: false,
@@ -57,6 +63,16 @@ export function createCombat(scrollIndex, run, hooks = {}) {
 
 function bossPos(c) {
   return { x: c.boss.x + c.boss.knockX, y: c.boss.y };
+}
+
+// The combat log: one line per real fight event, newest at the end, kept
+// at 5 entries (the panel shows exactly 5 lines). Exported so the smoke
+// test can prove the cap. Entries are only ever recorded at the event
+// sites below — never invented.
+export const BATTLE_LOG_MAX = 5;
+export function logBattleEvent(c, text, color) {
+  c.battleLog.push({ text, color });
+  while (c.battleLog.length > BATTLE_LOG_MAX) c.battleLog.shift();
 }
 
 // The dedicated float-text zone: left of the boss, clear of the fusion
@@ -202,6 +218,7 @@ function damagePlayer(c, rawAmount) {
   c.stats.damageTaken += amount;
   c.combo.count = 0;
   c.combo.timer = 0;
+  logBattleEvent(c, `You took ${amount} dmg`, '#ff8787');
   playHurt();
   burst(c.particles, c.player.x, c.player.y, '#c1271b', 12, 140, 4, 0.5);
   if (c.player.hp <= 0) {
@@ -219,6 +236,7 @@ function winFight(c) {
   c.won = true;
   const acc = c.stats.casts > 0 ? c.stats.accuracySum / c.stats.casts : 0;
   c.essenceEarned = 40 + c.scrollIndex * 15 + Math.round(acc * 30) + c.stats.maxCombo * 2;
+  logBattleEvent(c, `${c.def.name} sealed!`, '#ffd43b');
   playSealStamp();
   playVictory();
   burst(c.particles, b.x, b.y, '#c1271b', 40, 260, 6, 1);
@@ -227,12 +245,24 @@ function winFight(c) {
 
 function damageBoss(c, amount, elementId, opts = {}) {
   const boss = c.boss;
+  // Already sealed: a spell still in flight must not pad the damage stat
+  // or the log with hits on a corpse.
+  if (boss.hp <= 0) return 0;
   const eff = opts.eff ?? effectiveness(elementId, c.def.element);
   let dmg = amount * eff * (opts.crit ? 1.5 : 1);
   dmg = Math.round(dmg);
   boss.hp = Math.max(0, boss.hp - dmg);
   c.stats.damage += dmg;
   c.stats.hits += 1;
+  // The log records the hit with its final damage — the fusion's name
+  // when the caller passes a label (a combo landing), else the element.
+  // Tempest's follow-up strikes and the Deep Freeze shatter stay silent,
+  // or one cast would flood the log with five near-identical lines.
+  if (!opts.silent) {
+    const el0 = ELEMENT_BY_ID[elementId];
+    const label = opts.label ?? `${el0.kanji} ${el0.name}`;
+    logBattleEvent(c, `${label} hits for ${dmg} dmg`, opts.labelColor ?? el0.color);
+  }
   const b = bossPos(c);
   const el = ELEMENT_BY_ID[elementId];
   spellBurst(c.particles, b.x, b.y, elementId, 1);
@@ -252,6 +282,7 @@ function damageBoss(c, amount, elementId, opts = {}) {
   }
   c.summons = c.summons.filter((s) => s.hp > 0);
   if (boss.hp <= 0 && c.phase === 'fight') winFight(c);
+  return dmg;
 }
 
 // A fusion combo: two elements cast in sequence inside the fusion window
@@ -298,6 +329,9 @@ function castCombo(c, combo, secondElement, accuracy, perfect) {
   };
   c.rankPoints += 25 + Math.round(accuracy * 10);
   c.lastCast = null;
+  // The seal lights the moment the fusion is cast, and the log records it.
+  c.discoveredCombos.add(combo.id);
+  logBattleEvent(c, `${combo.kanji} ${combo.name} fused!`, combo.color);
   if (c.hooks.onComboDiscovered) c.hooks.onComboDiscovered(combo.id);
   return true;
 }
@@ -362,6 +396,7 @@ function tryAutoCast(c) {
   } else {
     c.ink = Math.max(0, c.ink - INK.fizzleCost);
     c.castFeedback = { text: 'UNCLEAR STROKE — TRY AGAIN', color: '#868e96', timer: 1.2, accuracy: result.accuracy };
+    logBattleEvent(c, 'Unclear stroke. Try again.', '#868e96');
     playFizzle();
   }
 }
@@ -435,6 +470,7 @@ export function updateCombat(c, dt, keys) {
     boss.enraged = true;
     const enrAt = floatZone(c, 24);
     floatText(c.particles, enrAt.x, enrAt.y, 'ENRAGED!', '#c1271b', 26, 'right');
+    logBattleEvent(c, `${c.def.name} is enraged!`, '#c1271b');
   }
   if (boss.knockX !== 0) boss.knockX *= Math.pow(0.02, dt);
   if (Math.abs(boss.knockX) < 1) boss.knockX = 0;
@@ -551,12 +587,13 @@ export function updateCombat(c, dt, keys) {
       const el = s.element;
       if (s.combo) {
         const combo = s.combo;
+        const comboLabel = `${combo.kanji} ${combo.name}`;
         if (combo.id === 'tempest') {
           // Tempest lands as six rapid strikes: one now, five queued.
-          damageBoss(c, Math.round(s.damage / 6), el.id, { crit: s.crit, eff: s.eff });
+          damageBoss(c, Math.round(s.damage / 6), el.id, { crit: s.crit, eff: s.eff, label: comboLabel, labelColor: combo.color });
           c.pendingHits.push({ elementId: 'wind', damage: Math.round(s.damage / 6), left: 5, timer: 0.15, eff: s.eff });
         } else {
-          damageBoss(c, s.damage, el.id, { crit: s.crit, eff: s.eff, fullSplash: combo.id === 'stormsurge' });
+          damageBoss(c, s.damage, el.id, { crit: s.crit, eff: s.eff, fullSplash: combo.id === 'stormsurge', label: comboLabel, labelColor: combo.color });
         }
         // A fusion lands as both elements at once: two flavoured bursts.
         spellBurst(c.particles, s.tx, s.ty, combo.first, 1.2);
@@ -566,7 +603,7 @@ export function updateCombat(c, dt, keys) {
         if (combo.id === 'magma') { c.boss.burnUntil = c.time + 5; c.boss.burnDmg = 4; }
         if (combo.id === 'deepfreeze') {
           c.boss.frozenUntil = c.time + 7;
-          damageBoss(c, 30, 'ice', { crit: false, eff: 1 });
+          damageBoss(c, 30, 'ice', { crit: false, eff: 1, silent: true });
           const shAt = floatZone(c, 52);
           floatText(c.particles, shAt.x, shAt.y, 'SHATTER!', '#66d9e8', 24, 'right');
         }
@@ -597,7 +634,7 @@ export function updateCombat(c, dt, keys) {
       h.timer = 0.15;
       h.left -= 1;
       const b2 = bossPos(c);
-      damageBoss(c, h.damage, h.elementId, { crit: false, eff: h.eff });
+      damageBoss(c, h.damage, h.elementId, { crit: false, eff: h.eff, silent: true });
       burst(c.particles, b2.x, b2.y, '#ffd43b', 8, 160, 4, 0.4);
     }
   }
@@ -1142,6 +1179,91 @@ function drawArenaBackground(ctx, c, time) {
   ctx.stroke();
 }
 
+// --- The bottom row: BATTLE RECORD + FUSION SEALS. The strip below the
+// arena (y 484..568) used to be empty paper; it now carries the live
+// fight record and the discovered fusion seals as one tidy dashboard:
+// two panels on a fixed grid, aligned columns, generous padding, nothing
+// overlapping. The stats read straight from c.stats (the same numbers
+// the victory screen reports); the log shows the last 5 real events.
+function drawBottomRow(ctx, c) {
+  const rec = BATTLE_RECORD_PANEL;
+  const seals = FUSION_SEALS_PANEL;
+  // Panel A: BATTLE RECORD — live stats on the left, the combat log on
+  // the right, split by a thin divider.
+  ctx.fillStyle = 'rgba(43, 33, 24, 0.92)';
+  ctx.beginPath();
+  ctx.roundRect(rec.x, rec.y, rec.w, rec.h, 10);
+  ctx.fill();
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffd43b';
+  ctx.font = '700 11px Georgia, serif';
+  ctx.fillText('BATTLE RECORD', rec.x + 12, rec.y + 16);
+  ctx.fillText('COMBAT LOG', rec.x + 192, rec.y + 16);
+  const acc = c.stats.casts > 0 ? Math.round((c.stats.accuracySum / c.stats.casts) * 100) : 0;
+  const statCells = [
+    { label: 'CASTS', value: String(c.stats.casts) },
+    { label: 'ACCURACY', value: `${acc}%` },
+    { label: 'MAX COMBO', value: `x${c.stats.maxCombo}` },
+    { label: 'DAMAGE', value: String(c.stats.damage) },
+  ];
+  statCells.forEach((cell, i) => {
+    const cx = rec.x + 12 + (i % 2) * 82;
+    const ly = rec.y + 30 + Math.floor(i / 2) * 28;
+    ctx.fillStyle = '#d9c9a8';
+    ctx.font = '700 8px Georgia, serif';
+    ctx.fillText(cell.label, cx, ly);
+    ctx.fillStyle = '#f6efdd';
+    ctx.font = '700 15px Georgia, serif';
+    ctx.fillText(cell.value, cx, ly + 15);
+  });
+  ctx.strokeStyle = 'rgba(246, 239, 221, 0.25)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(rec.x + 180, rec.y + 10);
+  ctx.lineTo(rec.x + 180, rec.y + rec.h - 10);
+  ctx.stroke();
+  const entries = c.battleLog.slice(-BATTLE_LOG_MAX);
+  if (entries.length === 0) {
+    ctx.fillStyle = '#868e96';
+    ctx.font = 'italic 11px Georgia, serif';
+    ctx.fillText('The fight begins. Draw your first kanji.', rec.x + 192, rec.y + 34);
+  } else {
+    ctx.font = '11px Georgia, serif';
+    entries.forEach((e, i) => {
+      ctx.fillStyle = e.color;
+      ctx.fillText(e.text, rec.x + 192, rec.y + 30 + i * 11);
+    });
+  }
+  // Panel B: FUSION SEALS — all six combos in two rows of three.
+  // Discovered ones are lit in their combo color with kanji + name; the
+  // rest stay greyed with a question mark. The count sits top-right.
+  ctx.fillStyle = 'rgba(43, 33, 24, 0.92)';
+  ctx.beginPath();
+  ctx.roundRect(seals.x, seals.y, seals.w, seals.h, 10);
+  ctx.fill();
+  ctx.fillStyle = '#ffd43b';
+  ctx.font = '700 11px Georgia, serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('FUSION SEALS', seals.x + 12, seals.y + 16);
+  ctx.textAlign = 'right';
+  ctx.fillText(`${c.discoveredCombos.size}/6`, seals.x + seals.w - 12, seals.y + 16);
+  ctx.textAlign = 'center';
+  COMBOS.forEach((combo, i) => {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const cx = seals.x + 12 + col * 77 + 38;
+    const ky = seals.y + 36 + row * 28;
+    const found = c.discoveredCombos.has(combo.id);
+    ctx.fillStyle = found ? combo.color : '#868e96';
+    ctx.font = '700 16px "Noto Serif JP", serif';
+    ctx.fillText(found ? combo.kanji : '?', cx, ky);
+    ctx.fillStyle = found ? '#f6efdd' : '#868e96';
+    ctx.font = '700 8px Georgia, serif';
+    ctx.fillText(combo.name, cx, ky + 11);
+  });
+  ctx.textAlign = 'left';
+}
+
 export function drawCombat(ctx, c, time) {
   const def = c.def;
   const el = ELEMENT_BY_ID[def.element];
@@ -1568,6 +1690,10 @@ export function drawCombat(ctx, c, time) {
   ctx.textAlign = 'center';
   ctx.fillText(`${c.difficulty.kanji} ${c.difficulty.name}  ·  HP x${c.difficulty.bossHpMul}  ·  Score x${c.difficulty.scoreMul}`, PAD.x + PAD.w / 2 - 16, PAD.y + PAD.h + 153);
   ctx.textAlign = 'left';
+  // The bottom row: the live battle record and the fusion seals, filling
+  // the strip below the arena. Drawn before the intro/win/lose overlays,
+  // so those dim it along with the rest of the fight.
+  drawBottomRow(ctx, c);
   // Intro card.
   if (c.phase === 'intro') {
     ctx.save();

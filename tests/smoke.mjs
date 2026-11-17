@@ -14,7 +14,7 @@ import { chromium } from '/home/hatch/workspace/makefun/agentstrike-shots/node_m
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { ARENA, BANNER, ELEMENT_BY_ID, PAD, WINLOSE_STRIP } from '../game/src/config.js';
+import { ARENA, BANNER, BATTLE_RECORD_PANEL, BOTTOM_ROW, ELEMENT_BY_ID, FUSION_SEALS_PANEL, PAD, WINLOSE_STRIP } from '../game/src/config.js';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const BASE = 'http://localhost:8080';
@@ -104,6 +104,16 @@ check('WIN/LOSE strip sits above the arena, clear of the pad',
 check('fusion banner clears the boss head',
   BANNER.cy + BANNER.h / 2 < combatLayout.bossY - combatLayout.bossR,
   `banner bottom ${BANNER.cy + BANNER.h / 2}, boss top ${combatLayout.bossY - combatLayout.bossR}`);
+check('bottom row sits below the arena, clear of the pad and the frame',
+  BOTTOM_ROW.y >= ARENA.y + ARENA.h && BOTTOM_ROW.y + BOTTOM_ROW.h <= 576 && BOTTOM_ROW.x + BOTTOM_ROW.w <= PAD.x,
+  `row y${BOTTOM_ROW.y}..${BOTTOM_ROW.y + BOTTOM_ROW.h}, arena ends ${ARENA.y + ARENA.h}, pad x${PAD.x}`);
+check('bottom row panels tile the row exactly, same height, 8px gap',
+  BATTLE_RECORD_PANEL.y === BOTTOM_ROW.y && FUSION_SEALS_PANEL.y === BOTTOM_ROW.y
+  && BATTLE_RECORD_PANEL.h === BOTTOM_ROW.h && FUSION_SEALS_PANEL.h === BOTTOM_ROW.h
+  && BATTLE_RECORD_PANEL.x === BOTTOM_ROW.x
+  && FUSION_SEALS_PANEL.x === BATTLE_RECORD_PANEL.x + BATTLE_RECORD_PANEL.w + 8
+  && FUSION_SEALS_PANEL.x + FUSION_SEALS_PANEL.w === BOTTOM_ROW.x + BOTTOM_ROW.w,
+  `record ${BATTLE_RECORD_PANEL.w} + seals ${FUSION_SEALS_PANEL.w} = row ${BOTTOM_ROW.w}`);
 
 // Keep the painter safe while the test draws, and silence the boss's
 // attacks: taking a hit resets the combo chain, which would make the
@@ -201,6 +211,26 @@ const afterFusion = await page.evaluate(() => ({
 check('fire+wind fuses into a combo', afterFusion.combos >= 1, JSON.stringify(afterFusion));
 check('combo is recorded in the codex', afterFusion.discovered.includes('firestorm'), JSON.stringify(afterFusion.discovered));
 
+// --- 4e. Battle record + fusion seals: the bottom row reads real data. ---
+const record = await page.evaluate(() => {
+  const c = window.__inkblade.combat;
+  return {
+    log: c.battleLog.map((e) => e.text),
+    stats: { casts: c.stats.casts, damage: c.stats.damage, maxCombo: c.stats.maxCombo },
+    seals: [...c.discoveredCombos],
+  };
+});
+check('battle log records real events (spell hit + fusion)',
+  record.log.some((t) => t.includes('Fire hits for')) && record.log.some((t) => t.includes('Firestorm fused!')),
+  record.log.join(' | '));
+check('battle log never exceeds 5 entries',
+  record.log.length <= 5, `${record.log.length} entries`);
+check('battle stats update during the fight',
+  record.stats.casts >= 3 && record.stats.damage > 0 && record.stats.maxCombo >= 1,
+  `casts ${record.stats.casts}, damage ${record.stats.damage}, max combo x${record.stats.maxCombo}`);
+check('a fused combo lights its seal',
+  record.seals.includes('firestorm'), `discovered: ${record.seals.join(', ') || '(none)'}`);
+
 // --- 5. Pause and resume. ---
 await page.keyboard.press('p');
 await page.waitForTimeout(300);
@@ -220,6 +250,11 @@ check('victory stats recorded', victoryResult && victoryResult.damage > 0 && vic
 check('fight grade awarded', victoryResult && ['S', 'A', 'B', 'C'].includes(victoryResult.grade), `grade=${victoryResult?.grade}`);
 const rankAfterFight = await page.evaluate(() => window.__inkblade.progress.rankPoints);
 check('rank points awarded', victoryResult.rankPoints > 0 && rankAfterFight >= victoryResult.rankPoints, `fight +${victoryResult.rankPoints}, total ${rankAfterFight}`);
+const victoryLog = await page.evaluate(() => window.__inkblade.combat.battleLog.map((e) => e.text));
+check('battle log caps at 5, keeps the seal last',
+  victoryLog.length === 5 && victoryLog[victoryLog.length - 1] === 'Kagaribi sealed!'
+  && victoryLog.some((t) => t.includes('fused!')) && victoryLog.some((t) => t.includes('enraged!')),
+  victoryLog.join(' | '));
 // --- 6b. Feats: the first seal and the first fusion unlocked. ---
 const featsAfterFight = await page.evaluate(() => window.__inkblade.feats);
 check('feats unlock on fight milestones', featsAfterFight.includes('first-seal') && featsAfterFight.includes('first-fusion'), JSON.stringify(featsAfterFight));
@@ -294,6 +329,9 @@ await page.evaluate(() => {
 await page.waitForTimeout(12000);
 const screen5 = await page.evaluate(() => window.__inkblade.screen);
 check('defeat screen reached', screen5 === 'defeat', `screen=${screen5}`);
+const defeatLog = await page.evaluate(() => window.__inkblade.combat.battleLog.map((e) => e.text));
+check('battle log records damage taken',
+  defeatLog.some((t) => t.includes('You took')), defeatLog.join(' | '));
 await clickButton(page, 402, 451); // RETRY
 await page.waitForTimeout(2600);
 const screen6 = await page.evaluate(() => window.__inkblade.screen);

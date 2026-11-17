@@ -16,6 +16,9 @@ function scaledStrokes(elementId, count) {
 }
 
 function stageFight(g, scrollIndex, opts) {
+  // The staged fight shows the profile's discovered seals, same as a
+  // real fight started from the menu.
+  g.run.combosDiscovered = g.progress.combosDiscovered;
   const combat = createCombat(scrollIndex, g.run);
   combat.phase = 'fight';
   combat.stats.startTime = 0;

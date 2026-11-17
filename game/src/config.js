@@ -17,6 +17,14 @@ export const ARENA = { x: 24, y: 112, w: 664, h: 364 };
 export const WINLOSE_STRIP = { x: 24, y: 80, w: 664, h: 24 };
 export const BANNER = { w: 430, h: 72, cy: 158 }; // centred on the arena, y 122..194
 
+// The bottom row below the arena (y 484..568): the live fight record and
+// the discovered fusion seals. It spans exactly the arena's width and
+// stops 8px short of the screen edge; the ink pad panel owns the right
+// side, so the row never crosses x 688.
+export const BOTTOM_ROW = { x: 24, y: 484, w: 664, h: 84 };
+export const BATTLE_RECORD_PANEL = { x: 24, y: 484, w: 400, h: 84 };
+export const FUSION_SEALS_PANEL = { x: 432, y: 484, w: 256, h: 84 };
+
 // Boss minions: small spirits per element that drift toward the painter.
 export const MINIONS = {
   fire: { name: 'Ember Imp', color: '#ff922b' },
