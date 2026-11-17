@@ -3,13 +3,13 @@
 // cast elemental spells. Bosses have distinct attack patterns, phases and a
 // weakness; spells interact with the elemental wheel, combos and ink.
 
-import { ARENA, BOSSES, CAST_PAUSE_MS, COMBO, COMBOS, ELEMENTS, ELEMENT_BY_ID, INK, PAD, PERFECT_THRESHOLD, PLAYER, STRONG_AGAINST, comboPartner, combosFrom, effectiveness, findCombo } from './config.js';
+import { ARENA, BANNER, BOSSES, CAST_PAUSE_MS, COMBO, COMBOS, ELEMENTS, ELEMENT_BY_ID, INK, MINIONS, PAD, PERFECT_THRESHOLD, PLAYER, STRONG_AGAINST, WINLOSE_STRIP, comboPartner, combosFrom, effectiveness, findCombo } from './config.js';
 import { drawBoss, drawBrushStroke, drawPlayer, drawSeal } from './sprites.js';
 import { burst, floatText, makeParticles, ring, spellBurst, trail, updateParticles, drawParticles } from './particles.js';
 import { recognise, isRealStroke } from './strokes.js';
 import { playBossRoar, playBrushSwish, playCombo, playElementImpact, playFizzle, playHurt, playPerfect, playSealStamp, playVictory } from './audio.js';
 
-const ELEMENT_BUTTONS = { x: PAD.x, y: 440, w: 66, h: 40, gap: 4, perRow: 4 };
+const ELEMENT_BUTTONS = { x: PAD.x, y: 446, w: 66, h: 40, gap: 4, perRow: 4 };
 
 function buttonRect(i) {
   const col = i % ELEMENT_BUTTONS.perRow;
@@ -28,10 +28,11 @@ export function createCombat(scrollIndex, run, hooks = {}) {
     phase: 'intro', phaseTimer: 0,
     time: 0,
     boss: {
-      hp: def.hp, maxHp: def.hp, x: 480, y: 250, r: 62,
+      hp: def.hp, maxHp: def.hp, x: 450, y: 305, r: 100,
       attackTimer: 1.6, pattern: 0, frozenUntil: 0, burnUntil: 0, burnTick: 0, burnDmg: 3,
       knockX: 0, diving: null, enraged: false,
     },
+    minionTimer: 10, minionsSpawned: 0,
     player: { x: PLAYER.startX, y: PLAYER.startY, hp: run.maxHp, maxHp: run.maxHp, shield: run.startShielded, invuln: 0 },
     ink: run.maxInk, maxInk: run.maxInk, refill: run.refill,
     combo: { count: 0, timer: 0 },
@@ -52,6 +53,48 @@ export function createCombat(scrollIndex, run, hooks = {}) {
 function bossPos(c) {
   return { x: c.boss.x + c.boss.knockX, y: c.boss.y };
 }
+
+// The dedicated float-text zone: left of the boss, clear of the fusion
+// banner (which hangs at the top of the arena, y 122..194). Damage
+// numbers, WEAK!/RESISTED, ENRAGED! and SHATTER! all live here, so they
+// can never overlap the banner no matter when they fire.
+function floatZone(c, dy) {
+  const b = bossPos(c);
+  return { x: b.x - c.boss.r - 12, y: b.y + dy };
+}
+
+function spawnMinion(c) {
+  const spec = MINIONS[c.def.element];
+  const b = bossPos(c);
+  const a = Math.random() * Math.PI * 2;
+  const s = {
+    x: b.x + Math.cos(a) * (c.boss.r + 30), y: b.y + Math.sin(a) * (c.boss.r + 30),
+    vx: 0, vy: 0, r: 13, hp: 12, color: spec.color, kind: 'minion', age: 0,
+    minion: true, name: spec.name,
+  };
+  s.x = Math.max(ARENA.x + 20, Math.min(ARENA.x + ARENA.w - 20, s.x));
+  s.y = Math.max(ARENA.y + 20, Math.min(ARENA.y + ARENA.h - 20, s.y));
+  c.summons.push(s);
+  c.minionsSpawned += 1;
+}
+
+function minionCount(c) {
+  return c.summons.filter((s) => s.minion).length;
+}
+
+// Fight grade, live on the HUD and final on the victory screen: accuracy
+// carries the most weight, then damage taken, then speed.
+export function fightGrade(c) {
+  const acc = c.stats.casts > 0 ? c.stats.accuracySum / c.stats.casts : 1;
+  const elapsed = Math.max(1, c.time - c.stats.startTime);
+  const taken = c.stats.damageTaken;
+  if (acc >= 0.9 && taken <= 10 && elapsed <= 120) return 'S';
+  if (acc >= 0.8 && taken <= 30) return 'A';
+  if (acc >= 0.65) return 'B';
+  return 'C';
+}
+
+export const GRADE_COLORS = { S: '#ffd43b', A: '#69db7c', B: '#74c0fc', C: '#ced4da' };
 
 function bossAttackInterval(c) {
   const base = 2.4 - c.scrollIndex * 0.16;
@@ -77,24 +120,27 @@ function bossAttack(c) {
   const dist = Math.hypot(dx, dy) || 1;
   const frozen = c.time < c.boss.frozenUntil;
   const speedMul = frozen ? 0.5 : 1;
+  // The boss's mouth: projectiles and summons leave from the body's front
+  // edge, so they never spawn inside the (now much bigger) sprite.
+  const mouth = b.x - c.boss.r * 0.7;
   switch (kind) {
     case 'fireball':
-      spawnProjectile(c, b.x - 40, b.y, (dx / dist) * 210 * speedMul, (dy / dist) * 210 * speedMul, 10, '#e8590c', 10, 'fire');
+      spawnProjectile(c, mouth, b.y, (dx / dist) * 210 * speedMul, (dy / dist) * 210 * speedMul, 10, '#e8590c', 10, 'fire');
       break;
     case 'ember':
-      spawnSummon(c, b.x - 30, b.y + 30, 'ember', '#ff922b');
-      spawnSummon(c, b.x - 10, b.y - 40, 'ember', '#ff922b');
+      spawnSummon(c, mouth, b.y + 30, 'ember', '#ff922b');
+      spawnSummon(c, mouth + 20, b.y - 40, 'ember', '#ff922b');
       break;
     case 'jet':
-      spawnProjectile(c, b.x - 40, b.y, (dx / dist) * 310 * speedMul, (dy / dist) * 310 * speedMul, 8, '#1971c2', 9, 'jet');
+      spawnProjectile(c, mouth, b.y, (dx / dist) * 310 * speedMul, (dy / dist) * 310 * speedMul, 8, '#1971c2', 9, 'jet');
       break;
     case 'wave':
-      spawnSummon(c, b.x - 40, b.y, 'wave', '#4dabf7', 16);
+      spawnSummon(c, mouth, b.y, 'wave', '#4dabf7', 16);
       break;
     case 'blade': {
       for (let i = -1; i <= 1; i += 1) {
         const a = Math.atan2(dy, dx) + i * 0.3;
-        spawnProjectile(c, b.x - 40, b.y, Math.cos(a) * 240 * speedMul, Math.sin(a) * 240 * speedMul, 8, '#2b8a3e', 9, 'blade');
+        spawnProjectile(c, mouth, b.y, Math.cos(a) * 240 * speedMul, Math.sin(a) * 240 * speedMul, 8, '#2b8a3e', 9, 'blade');
       }
       break;
     }
@@ -102,13 +148,13 @@ function bossAttack(c) {
       c.boss.diving = { tx: p.x, ty: p.y, back: false, t: 0 };
       break;
     case 'bolt':
-      spawnProjectile(c, b.x - 40, b.y - 10, (dx / dist) * 390 * speedMul, (dy / dist) * 390 * speedMul, 7, '#e67700', 12, 'bolt');
+      spawnProjectile(c, mouth, b.y - 10, (dx / dist) * 390 * speedMul, (dy / dist) * 390 * speedMul, 7, '#e67700', 12, 'bolt');
       break;
     case 'orb':
-      spawnProjectile(c, b.x - 40, b.y, (dx / dist) * 120 * speedMul, (dy / dist) * 120 * speedMul, 13, '#7048e8', 14, 'orb');
+      spawnProjectile(c, mouth, b.y, (dx / dist) * 120 * speedMul, (dy / dist) * 120 * speedMul, 13, '#7048e8', 14, 'orb');
       break;
     case 'rock':
-      spawnProjectile(c, b.x - 30, b.y - 20, (dx / dist) * 200 * speedMul, -160, 11, '#8d5a2b', 12, 'rock');
+      spawnProjectile(c, mouth + 10, b.y - 20, (dx / dist) * 200 * speedMul, -160, 11, '#8d5a2b', 12, 'rock');
       break;
     case 'spikes':
       c.telegraphs.push({ kind: 'spikes', x: p.x, y: p.y, r: 52, timer: 0.8, damage: 15 });
@@ -119,7 +165,7 @@ function bossAttack(c) {
     case 'feather': {
       for (let i = 0; i < 5; i += 1) {
         const a = Math.atan2(dy, dx) + (i - 2) * 0.22;
-        spawnProjectile(c, b.x - 40, b.y, Math.cos(a) * 220 * speedMul, Math.sin(a) * 220 * speedMul, 6, '#ffd43b', 7, 'feather');
+        spawnProjectile(c, mouth, b.y, Math.cos(a) * 220 * speedMul, Math.sin(a) * 220 * speedMul, 6, '#ffd43b', 7, 'feather');
       }
       break;
     }
@@ -127,8 +173,8 @@ function bossAttack(c) {
       c.pools.push({ x: p.x, y: p.y, r: 46, timer: 4, tick: 0 });
       break;
     case 'summon':
-      spawnSummon(c, b.x - 20, b.y + 40, 'wisp', '#b197fc', 14);
-      spawnSummon(c, b.x - 20, b.y - 40, 'wisp', '#b197fc', 14);
+      spawnSummon(c, mouth + 10, b.y + 40, 'wisp', '#b197fc', 14);
+      spawnSummon(c, mouth + 10, b.y - 40, 'wisp', '#b197fc', 14);
       break;
     default:
       break;
@@ -183,9 +229,11 @@ function damageBoss(c, amount, elementId, opts = {}) {
   const b = bossPos(c);
   const el = ELEMENT_BY_ID[elementId];
   spellBurst(c.particles, b.x, b.y, elementId, 1);
-  floatText(c.particles, b.x, b.y - boss.r - 10, `-${dmg}`, el.color, opts.crit ? 30 : 24);
-  if (eff >= 2) floatText(c.particles, b.x, b.y - boss.r - 38, 'WEAK! x2', '#c1271b', 22);
-  else if (eff <= 0.5) floatText(c.particles, b.x, b.y - boss.r - 38, 'RESISTED', '#868e96', 18);
+  const dmgAt = floatZone(c, -6);
+  floatText(c.particles, dmgAt.x, dmgAt.y, `-${dmg}`, el.color, opts.crit ? 30 : 24, 'right');
+  const effAt = floatZone(c, -34);
+  if (eff >= 2) floatText(c.particles, effAt.x, effAt.y, 'WEAK! x2', '#c1271b', 22, 'right');
+  else if (eff <= 0.5) floatText(c.particles, effAt.x, effAt.y, 'RESISTED', '#868e96', 18, 'right');
   // Splash: summons near the boss take half; lightning chains at full power,
   // and so does Storm Surge.
   const splash = elementId === 'lightning' || opts.fullSplash ? dmg : Math.round(dmg * 0.5);
@@ -331,6 +379,11 @@ export function updateCombat(c, dt, keys) {
       c.phase = 'fight';
       c.stats.startTime = c.time;
       c.boss.attackTimer = 1.4;
+      // The boss opens with three minion spirits, so the arena is alive
+      // from the first second of the fight.
+      spawnMinion(c);
+      spawnMinion(c);
+      spawnMinion(c);
     }
     updateParticles(c.particles, dt);
     return;
@@ -342,6 +395,12 @@ export function updateCombat(c, dt, keys) {
   }
   // Ink refills steadily.
   c.ink = Math.min(c.maxInk, c.ink + c.refill * dt);
+  // Minions trickle back in: at most 3 alive at once, one every 10s.
+  c.minionTimer -= dt;
+  if (c.minionTimer <= 0) {
+    c.minionTimer = 10;
+    if (minionCount(c) < 3) spawnMinion(c);
+  }
   if (c.combo.timer > 0) {
     c.combo.timer -= dt;
     if (c.combo.timer <= 0) c.combo.count = 0;
@@ -367,7 +426,8 @@ export function updateCombat(c, dt, keys) {
   const boss = c.boss;
   if (!boss.enraged && boss.hp < boss.maxHp * 0.5) {
     boss.enraged = true;
-    floatText(c.particles, boss.x, boss.y - boss.r - 16, 'ENRAGED!', '#c1271b', 26);
+    const enrAt = floatZone(c, 24);
+    floatText(c.particles, enrAt.x, enrAt.y, 'ENRAGED!', '#c1271b', 26, 'right');
   }
   if (boss.knockX !== 0) boss.knockX *= Math.pow(0.02, dt);
   if (Math.abs(boss.knockX) < 1) boss.knockX = 0;
@@ -396,8 +456,8 @@ export function updateCombat(c, dt, keys) {
       }
       if (Math.hypot(p.x - boss.x, p.y - boss.y) < boss.r + 14) damagePlayer(c, 14);
     } else {
-      const dx = 480 - boss.x;
-      const dy = 250 - boss.y;
+      const dx = 450 - boss.x;
+      const dy = 305 - boss.y;
       const dist = Math.hypot(dx, dy);
       if (dist < 12) boss.diving = null;
       else {
@@ -434,7 +494,8 @@ export function updateCombat(c, dt, keys) {
     const dx = p.x - s.x;
     const dy = p.y - s.y;
     const dist = Math.hypot(dx, dy) || 1;
-    const sp = 55 + c.scrollIndex * 6;
+    // Staged summons (screenshots) can be frozen in place.
+    const sp = s.still ? 0 : 55 + c.scrollIndex * 6;
     s.x += (dx / dist) * sp * dt + Math.sin(s.age * 5) * 12 * dt;
     s.y += (dy / dist) * sp * dt;
     if (Math.hypot(s.x - p.x, s.y - p.y) < s.r + PLAYER.radius - 2) {
@@ -499,7 +560,8 @@ export function updateCombat(c, dt, keys) {
         if (combo.id === 'deepfreeze') {
           c.boss.frozenUntil = c.time + 7;
           damageBoss(c, 30, 'ice', { crit: false, eff: 1 });
-          floatText(c.particles, s.tx, s.ty - c.boss.r - 60, 'SHATTER!', '#66d9e8', 24);
+          const shAt = floatZone(c, 52);
+          floatText(c.particles, shAt.x, shAt.y, 'SHATTER!', '#66d9e8', 24, 'right');
         }
         if (combo.id === 'eclipse') {
           ring(c.particles, s.tx, s.ty, '#ffe066', 180);
@@ -660,6 +722,419 @@ export function drawWheel(ctx, x, y, r) {
   ctx.restore();
 }
 
+// --- The arena landscape: every scroll has its own full Japanese scene
+// filling the whole combat area, so no blank paper is ever visible in a
+// fight. Placement is seeded (deterministic, never flickers); motion comes
+// from time-based drift of the ambient motes.
+
+function seededRand(seed) {
+  let s = seed * 9301 + 49297;
+  return () => {
+    s = (s * 233280 + 9301) % 233280;
+    return s / 233280;
+  };
+}
+
+function arenaSky(ctx, top, mid, bottom) {
+  const g = ctx.createLinearGradient(0, ARENA.y, 0, ARENA.y + ARENA.h);
+  g.addColorStop(0, top);
+  g.addColorStop(0.55, mid);
+  g.addColorStop(1, bottom);
+  ctx.fillStyle = g;
+  ctx.fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h);
+}
+
+function arenaMountains(ctx, color, seed, baseY) {
+  const rand = seededRand(seed);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(ARENA.x, baseY);
+  let x = ARENA.x;
+  while (x < ARENA.x + ARENA.w) {
+    const w = 90 + rand() * 120;
+    const h = 50 + rand() * 90;
+    ctx.lineTo(x + w / 2, baseY - h);
+    ctx.lineTo(x + w, baseY);
+    x += w;
+  }
+  ctx.lineTo(ARENA.x + ARENA.w, ARENA.y + ARENA.h);
+  ctx.lineTo(ARENA.x, ARENA.y + ARENA.h);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function arenaGround(ctx, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(ARENA.x, ARENA.y + ARENA.h - 44, ARENA.w, 44);
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(ARENA.x, ARENA.y + ARENA.h - 44, ARENA.w, 2);
+}
+
+function motes(ctx, time, n, seed, color, size, rise, drift) {
+  const rand = seededRand(seed);
+  ctx.fillStyle = color;
+  for (let i = 0; i < n; i += 1) {
+    const bx = ARENA.x + rand() * ARENA.w;
+    const by = ARENA.y + rand() * ARENA.h;
+    const speed = 12 + rand() * 22;
+    const span = ARENA.h + 40;
+    const y = rise
+      ? ARENA.y + ARENA.h + 20 - ((by + time * speed) % span)
+      : ARENA.y - 20 + ((by + time * speed) % span);
+    const x = bx + Math.sin(time * 0.7 + i * 1.7) * drift;
+    ctx.globalAlpha = 0.35 + (i % 4) * 0.15;
+    ctx.beginPath();
+    ctx.arc(x, y, size * (0.6 + (i % 3) * 0.3), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function torii(ctx, x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x - w * 0.06, y, w * 0.12, h); // left pillar
+  ctx.fillRect(x + w * 0.94 - w * 0.06, y, w * 0.12, h); // right pillar
+  ctx.fillRect(x - w * 0.14, y - h * 0.14, w * 1.28, h * 0.12); // top lintel
+  ctx.fillRect(x - w * 0.04, y + h * 0.16, w * 1.08, h * 0.09); // second lintel
+  ctx.fillRect(x + w * 0.44, y - h * 0.26, w * 0.12, h * 0.14); // centre tablet
+}
+
+function pine(ctx, x, y, s, color, lean = 0) {
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 3 * s;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.quadraticCurveTo(x + lean * 20 * s, y - 40 * s, x + lean * 30 * s, y - 70 * s);
+  ctx.stroke();
+  for (let i = 0; i < 3; i += 1) {
+    ctx.beginPath();
+    ctx.ellipse(x + lean * (18 + i * 10) * s, y - (48 + i * 18) * s, 30 * s - i * 5 * s, 9 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function stoneLantern(ctx, x, y, s, glowColor) {
+  ctx.fillStyle = '#6b5a44';
+  ctx.fillRect(x - 4 * s, y - 26 * s, 8 * s, 26 * s);
+  ctx.fillRect(x - 9 * s, y - 34 * s, 18 * s, 5 * s);
+  ctx.fillRect(x - 7 * s, y - 44 * s, 14 * s, 10 * s);
+  ctx.fillStyle = glowColor;
+  ctx.globalAlpha = 0.9;
+  ctx.fillRect(x - 4 * s, y - 42 * s, 8 * s, 6 * s);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#4a3b2c';
+  ctx.beginPath();
+  ctx.moveTo(x - 11 * s, y - 44 * s);
+  ctx.lineTo(x, y - 54 * s);
+  ctx.lineTo(x + 11 * s, y - 44 * s);
+  ctx.closePath();
+  ctx.fill();
+}
+
+const ARENA_SCENES = {
+  kagaribi(ctx, time) {
+    // Burning temple at dusk: ember sky, a vermilion torii, scorched
+    // pines, ash ground, embers rising everywhere.
+    arenaSky(ctx, '#5c1a1a', '#c92a2a', '#ff922b');
+    ctx.fillStyle = 'rgba(255, 212, 59, 0.5)';
+    ctx.beginPath();
+    ctx.arc(ARENA.x + ARENA.w - 90, ARENA.y + 70, 34, 0, Math.PI * 2);
+    ctx.fill();
+    arenaMountains(ctx, 'rgba(60, 20, 16, 0.55)', 11, ARENA.y + ARENA.h - 44);
+    torii(ctx, ARENA.x + 70, ARENA.y + ARENA.h - 170, 150, 126, '#e03131');
+    pine(ctx, ARENA.x + 300, ARENA.y + ARENA.h - 44, 0.9, '#2b0f0a');
+    pine(ctx, ARENA.x + 620, ARENA.y + ARENA.h - 44, 1.1, '#2b0f0a');
+    arenaGround(ctx, '#3b2a20');
+    ctx.fillStyle = 'rgba(255, 146, 43, 0.35)';
+    for (let i = 0; i < 8; i += 1) {
+      ctx.beginPath();
+      ctx.ellipse(ARENA.x + 60 + i * 75, ARENA.y + ARENA.h - 24, 26, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    motes(ctx, time, 16, 21, '#ffd43b', 3, true, 10);
+  },
+  mizuchi(ctx, time) {
+    // Storm sea: deep blue water, a drowned gate, rain and a pale moon.
+    arenaSky(ctx, '#0b3d66', '#1864ab', '#1c5f8a');
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#e7f5ff';
+    ctx.beginPath();
+    ctx.arc(ARENA.x + ARENA.w - 80, ARENA.y + 64, 26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = '#0a2c4a';
+    ctx.fillRect(ARENA.x + 110, ARENA.y + 120, 18, 190);
+    ctx.fillRect(ARENA.x + 210, ARENA.y + 120, 18, 190);
+    ctx.fillRect(ARENA.x + 88, ARENA.y + 112, 164, 14);
+    ctx.fillStyle = '#0d3b5c';
+    for (let row = 0; row < 3; row += 1) {
+      ctx.beginPath();
+      for (let x = ARENA.x; x <= ARENA.x + ARENA.w; x += 8) {
+        const y = ARENA.y + ARENA.h - 90 + row * 28 + Math.sin((x + time * 30 + row * 40) * 0.03) * 6;
+        if (x === ARENA.x) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.lineTo(ARENA.x + ARENA.w, ARENA.y + ARENA.h);
+      ctx.lineTo(ARENA.x, ARENA.y + ARENA.h);
+      ctx.closePath();
+      ctx.fill();
+    }
+    arenaGround(ctx, '#0a2c4a');
+    ctx.strokeStyle = 'rgba(165, 216, 255, 0.4)';
+    ctx.lineWidth = 1.5;
+    const rand = seededRand(31);
+    for (let i = 0; i < 26; i += 1) {
+      const bx = ARENA.x + rand() * ARENA.w;
+      const span = ARENA.h + 60;
+      const y = ARENA.y - 30 + ((rand() * span + time * 260) % span);
+      ctx.beginPath();
+      ctx.moveTo(bx, y);
+      ctx.lineTo(bx - 8, y + 22);
+      ctx.stroke();
+    }
+  },
+  arashi(ctx, time) {
+    // Storm ridge: grey-green sky, pines bent by the gale, gust spirals,
+    // leaves tearing past, a broken fence.
+    arenaSky(ctx, '#3f4a3c', '#6b7a5e', '#a9b39a');
+    arenaMountains(ctx, 'rgba(43, 52, 40, 0.6)', 41, ARENA.y + ARENA.h - 44);
+    pine(ctx, ARENA.x + 90, ARENA.y + ARENA.h - 44, 1.2, '#2b3428', 1);
+    pine(ctx, ARENA.x + 560, ARENA.y + ARENA.h - 44, 0.9, '#2b3428', 1);
+    ctx.strokeStyle = 'rgba(246, 239, 221, 0.55)';
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 3; i += 1) {
+      const gx = ARENA.x + 150 + i * 180 + Math.sin(time * 1.2 + i) * 14;
+      const gy = ARENA.y + 120 + i * 60;
+      ctx.beginPath();
+      ctx.arc(gx, gy, 26 + i * 8, 0.4, Math.PI * 1.5);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = '#4a3b2c';
+    ctx.lineWidth = 5;
+    for (let i = 0; i < 5; i += 1) {
+      const fx = ARENA.x + 200 + i * 60;
+      ctx.beginPath();
+      ctx.moveTo(fx, ARENA.y + ARENA.h - 44);
+      ctx.lineTo(fx + 8, ARENA.y + ARENA.h - 44 - 26 - (i % 2) * 10);
+      ctx.stroke();
+    }
+    arenaGround(ctx, '#5c6650');
+    const rand = seededRand(51);
+    for (let i = 0; i < 14; i += 1) {
+      const span = ARENA.w + 60;
+      const x = ARENA.x - 30 + ((rand() * span + time * (60 + i * 8)) % span);
+      const y = ARENA.y + 60 + rand() * (ARENA.h - 140) + Math.sin(time * 3 + i) * 8;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.sin(time * 4 + i) * 0.8);
+      ctx.fillStyle = i % 2 ? '#69db7c' : '#8ce99a';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 7, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  },
+  raiko(ctx, time) {
+    // Iron peaks in a lightning storm: jagged dark mountains, a flashing
+    // bolt, stone lanterns, driving rain.
+    arenaSky(ctx, '#1a0b2e', '#3b2a63', '#5f3dc4');
+    ctx.fillStyle = '#241a3d';
+    ctx.beginPath();
+    ctx.moveTo(ARENA.x, ARENA.y + ARENA.h - 44);
+    const peaks = [150, 90, 190, 70, 160, 110];
+    peaks.forEach((h, i) => {
+      const x = ARENA.x + ((i + 0.5) / peaks.length) * ARENA.w;
+      ctx.lineTo(x, ARENA.y + ARENA.h - 44 - h);
+      ctx.lineTo(ARENA.x + ((i + 1) / peaks.length) * ARENA.w, ARENA.y + ARENA.h - 44);
+    });
+    ctx.lineTo(ARENA.x + ARENA.w, ARENA.y + ARENA.h);
+    ctx.lineTo(ARENA.x, ARENA.y + ARENA.h);
+    ctx.closePath();
+    ctx.fill();
+    // The flash: a bolt that strobes in from the clouds every few seconds.
+    const flash = Math.sin(time * 0.9) > 0.82 ? 1 : 0.08;
+    ctx.save();
+    ctx.globalAlpha = flash;
+    ctx.strokeStyle = '#ffe066';
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ARENA.x + 180, ARENA.y + 6);
+    ctx.lineTo(ARENA.x + 160, ARENA.y + 90);
+    ctx.lineTo(ARENA.x + 190, ARENA.y + 100);
+    ctx.lineTo(ARENA.x + 150, ARENA.y + 190);
+    ctx.stroke();
+    ctx.restore();
+    stoneLantern(ctx, ARENA.x + 90, ARENA.y + ARENA.h - 44, 1, '#ffd43b');
+    stoneLantern(ctx, ARENA.x + 610, ARENA.y + ARENA.h - 44, 0.9, '#ffd43b');
+    arenaGround(ctx, '#33284d');
+    ctx.strokeStyle = 'rgba(255, 224, 102, 0.25)';
+    ctx.lineWidth = 1.5;
+    const rand = seededRand(61);
+    for (let i = 0; i < 20; i += 1) {
+      const bx = ARENA.x + rand() * ARENA.w;
+      const span = ARENA.h + 60;
+      const y = ARENA.y - 30 + ((rand() * span + time * 300) % span);
+      ctx.beginPath();
+      ctx.moveTo(bx, y);
+      ctx.lineTo(bx - 6, y + 20);
+      ctx.stroke();
+    }
+  },
+  iwao(ctx, time) {
+    // The sleeping mountain: warm rock face, boulders, moss, lanterns and
+    // a lone pine on a ledge, dust drifting down.
+    arenaSky(ctx, '#e8d5b0', '#c9a06a', '#a9805a');
+    ctx.fillStyle = '#7a5230';
+    ctx.beginPath();
+    ctx.moveTo(ARENA.x, ARENA.y + ARENA.h - 44);
+    ctx.lineTo(ARENA.x + 140, ARENA.y + 60);
+    ctx.lineTo(ARENA.x + 320, ARENA.y + 150);
+    ctx.lineTo(ARENA.x + 480, ARENA.y + 40);
+    ctx.lineTo(ARENA.x + ARENA.w, ARENA.y + 130);
+    ctx.lineTo(ARENA.x + ARENA.w, ARENA.y + ARENA.h);
+    ctx.lineTo(ARENA.x, ARENA.y + ARENA.h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(43, 33, 24, 0.4)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ARENA.x + 140, ARENA.y + 60);
+    ctx.lineTo(ARENA.x + 200, ARENA.y + 180);
+    ctx.lineTo(ARENA.x + 170, ARENA.y + 260);
+    ctx.moveTo(ARENA.x + 480, ARENA.y + 40);
+    ctx.lineTo(ARENA.x + 440, ARENA.y + 170);
+    ctx.stroke();
+    ctx.fillStyle = '#8d5a2b';
+    ctx.beginPath();
+    ctx.ellipse(ARENA.x + 120, ARENA.y + ARENA.h - 60, 60, 24, 0, 0, Math.PI * 2);
+    ctx.ellipse(ARENA.x + 560, ARENA.y + ARENA.h - 56, 74, 28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#69db7c';
+    ctx.beginPath();
+    ctx.ellipse(ARENA.x + 300, ARENA.y + 210, 34, 12, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(ARENA.x + 500, ARENA.y + 130, 26, 10, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    pine(ctx, ARENA.x + 470, ARENA.y + 150, 0.7, '#2b5a34');
+    stoneLantern(ctx, ARENA.x + 80, ARENA.y + ARENA.h - 44, 1, '#ffd43b');
+    arenaGround(ctx, '#6b4a2b');
+    motes(ctx, time, 12, 71, '#e8d5b0', 2.5, false, 6);
+  },
+  hikari(ctx, time) {
+    // The white dawn: gold sky, a huge rising sun with turning rays,
+    // drifting clouds, a white torii, feathers falling.
+    arenaSky(ctx, '#fff3bf', '#ffd43b', '#ff922b');
+    const sx = ARENA.x + ARENA.w - 120;
+    const sy = ARENA.y + 110;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(time * 0.05);
+    ctx.strokeStyle = 'rgba(255, 243, 191, 0.8)';
+    ctx.lineWidth = 5;
+    for (let i = 0; i < 12; i += 1) {
+      ctx.rotate(Math.PI / 6);
+      ctx.beginPath();
+      ctx.moveTo(44, 0);
+      ctx.lineTo(70, 0);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.fillStyle = '#fff9db';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 40, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    for (let i = 0; i < 4; i += 1) {
+      const cx = ARENA.x + 80 + i * 150 + Math.sin(time * 0.2 + i) * 10;
+      const cy = ARENA.y + 60 + (i % 2) * 50;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 52, 16, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + 24, cy - 10, 34, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    torii(ctx, ARENA.x + 60, ARENA.y + ARENA.h - 160, 130, 116, '#f6efdd');
+    arenaGround(ctx, '#e8c877');
+    const rand = seededRand(81);
+    for (let i = 0; i < 10; i += 1) {
+      const span = ARENA.h + 40;
+      const y = ARENA.y - 20 + ((rand() * span + time * 14) % span);
+      const x = ARENA.x + rand() * ARENA.w + Math.sin(time * 0.9 + i) * 14;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.sin(time + i) * 0.7);
+      ctx.fillStyle = 'rgba(255, 249, 219, 0.95)';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 8, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  },
+  yami(ctx, time) {
+    // The final scroll: ink-wash night, a pale moon, a dead tree, ink
+    // pools on the ground and violet wisps drifting.
+    arenaSky(ctx, '#0d0620', '#1c1140', '#2b1a4d');
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = '#e5dbff';
+    ctx.beginPath();
+    ctx.arc(ARENA.x + 90, ARENA.y + 70, 30, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.25;
+    ctx.beginPath();
+    ctx.arc(ARENA.x + 90, ARENA.y + 70, 48, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = '#120a24';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(ARENA.x + ARENA.w - 90, ARENA.y + ARENA.h - 44);
+    ctx.lineTo(ARENA.x + ARENA.w - 100, ARENA.y + 140);
+    ctx.stroke();
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(ARENA.x + ARENA.w - 100, ARENA.y + 180);
+    ctx.lineTo(ARENA.x + ARENA.w - 150, ARENA.y + 120);
+    ctx.moveTo(ARENA.x + ARENA.w - 100, ARENA.y + 160);
+    ctx.lineTo(ARENA.x + ARENA.w - 60, ARENA.y + 100);
+    ctx.moveTo(ARENA.x + ARENA.w - 100, ARENA.y + 200);
+    ctx.lineTo(ARENA.x + ARENA.w - 140, ARENA.y + 190);
+    ctx.stroke();
+    arenaGround(ctx, '#171029');
+    ctx.fillStyle = '#0d0620';
+    for (let i = 0; i < 4; i += 1) {
+      ctx.beginPath();
+      ctx.ellipse(ARENA.x + 90 + i * 160, ARENA.y + ARENA.h - 22, 52, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(177, 151, 252, 0.4)';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 4; i += 1) {
+      ctx.beginPath();
+      ctx.ellipse(ARENA.x + 90 + i * 160, ARENA.y + ARENA.h - 22, 52, 10, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    motes(ctx, time, 12, 91, '#b197fc', 5, true, 16);
+  },
+};
+
+function drawArenaBackground(ctx, c, time) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h, 12);
+  ctx.clip();
+  const scene = ARENA_SCENES[c.def.id];
+  if (scene) scene(ctx, time);
+  ctx.restore();
+  // The arena's ink border, redrawn over the scene.
+  ctx.strokeStyle = 'rgba(43, 33, 24, 0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h, 12);
+  ctx.stroke();
+}
+
 export function drawCombat(ctx, c, time) {
   const def = c.def;
   const el = ELEMENT_BY_ID[def.element];
@@ -698,28 +1173,31 @@ export function drawCombat(ctx, c, time) {
   ctx.font = '700 15px Georgia, serif';
   ctx.fillText(c.combo.count > 1 ? `COMBO x${c.combo.count}` : 'COMBO —', 990, 60);
   ctx.textAlign = 'left';
-  // Arena panel.
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+  // WIN/LOSE strip: the stakes of the fight, always visible at the top of
+  // the combat screen, with the live fight grade in the middle.
+  ctx.fillStyle = 'rgba(43, 33, 24, 0.88)';
   ctx.beginPath();
-  ctx.roundRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h, 12);
+  ctx.roundRect(WINLOSE_STRIP.x, WINLOSE_STRIP.y, WINLOSE_STRIP.w, WINLOSE_STRIP.h, 8);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(43, 33, 24, 0.35)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  // Ground line and distant ink mountains.
-  ctx.strokeStyle = 'rgba(43, 33, 24, 0.25)';
-  ctx.lineWidth = 2;
+  ctx.font = '700 13px Georgia, serif';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#69db7c';
+  ctx.fillText(`✓ WIN — seal ${def.name}`, WINLOSE_STRIP.x + 12, WINLOSE_STRIP.y + 17);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#ff8787';
+  ctx.fillText('✗ LOSE — HP reaches 0', WINLOSE_STRIP.x + WINLOSE_STRIP.w - 12, WINLOSE_STRIP.y + 17);
+  const liveGrade = fightGrade(c);
+  ctx.fillStyle = GRADE_COLORS[liveGrade];
   ctx.beginPath();
-  ctx.moveTo(ARENA.x + 10, ARENA.y + ARENA.h - 40);
-  ctx.lineTo(ARENA.x + ARENA.w - 10, ARENA.y + ARENA.h - 40);
-  ctx.stroke();
-  ctx.fillStyle = 'rgba(43, 33, 24, 0.08)';
-  ctx.beginPath();
-  ctx.moveTo(ARENA.x + 60, ARENA.y + ARENA.h - 40);
-  ctx.lineTo(ARENA.x + 200, ARENA.y + 60);
-  ctx.lineTo(ARENA.x + 320, ARENA.y + ARENA.h - 40);
-  ctx.closePath();
+  ctx.roundRect(WINLOSE_STRIP.x + WINLOSE_STRIP.w / 2 - 52, WINLOSE_STRIP.y + 3, 104, 18, 9);
   ctx.fill();
+  ctx.fillStyle = '#2b2118';
+  ctx.font = '700 12px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`GRADE ${liveGrade}`, WINLOSE_STRIP.x + WINLOSE_STRIP.w / 2, WINLOSE_STRIP.y + 16);
+  ctx.textAlign = 'left';
+  // The arena: a full themed landscape per scroll (no blank paper here).
+  drawArenaBackground(ctx, c, time);
   // Pools, telegraphs.
   for (const pool of c.pools) {
     ctx.save();
@@ -759,8 +1237,24 @@ export function drawCombat(ctx, c, time) {
       ctx.restore();
     }
   }
-  // Boss and player.
+  // Boss and player. A soft light disc lifts the boss off the landscape
+  // (Mizuchi's blue was washing into the sea), then a saturated elemental
+  // aura glows behind the big centre-frame sprite.
   const b = bossPos(c);
+  const spot = ctx.createRadialGradient(b.x, b.y, 10, b.x, b.y, c.boss.r * 1.7);
+  spot.addColorStop(0, 'rgba(255, 248, 230, 0.34)');
+  spot.addColorStop(1, 'rgba(255, 248, 230, 0)');
+  ctx.fillStyle = spot;
+  ctx.beginPath();
+  ctx.arc(b.x, b.y, c.boss.r * 1.7, 0, Math.PI * 2);
+  ctx.fill();
+  const aura = ctx.createRadialGradient(b.x, b.y, c.boss.r * 0.4, b.x, b.y, c.boss.r * 1.9);
+  aura.addColorStop(0, `${el.glow}55`);
+  aura.addColorStop(1, `${el.glow}00`);
+  ctx.fillStyle = aura;
+  ctx.beginPath();
+  ctx.arc(b.x, b.y, c.boss.r * 1.9, 0, Math.PI * 2);
+  ctx.fill();
   drawBoss(ctx, def, b.x, b.y, c.boss.r, time, {
     enraged: c.boss.enraged,
     frozen: c.time < c.boss.frozenUntil,
@@ -774,12 +1268,25 @@ export function drawCombat(ctx, c, time) {
   } else {
     drawPlayer(ctx, c.player.x, c.player.y, time, c.player.shield);
   }
-  // Summons.
+  // Summons. Minion spirits glow in their element colour and wear a
+  // darker cap, so they read as enemies at a glance.
   for (const s of c.summons) {
+    ctx.save();
+    if (s.minion) {
+      ctx.shadowColor = s.color;
+      ctx.shadowBlur = 12;
+    }
     ctx.fillStyle = s.color;
     ctx.beginPath();
     ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
+    if (s.minion) {
+      ctx.fillStyle = 'rgba(26, 21, 18, 0.55)';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y - s.r * 0.45, s.r * 0.62, Math.PI, 0);
+      ctx.fill();
+    }
     ctx.fillStyle = '#1a1512';
     ctx.beginPath();
     ctx.arc(s.x - 4, s.y - 2, 2.5, 0, Math.PI * 2);
@@ -805,10 +1312,13 @@ export function drawCombat(ctx, c, time) {
     const orbR = (s.combo ? 18 : 12) - f * 4;
     ctx.save();
     ctx.globalAlpha = 0.9;
+    ctx.shadowColor = s.glow;
+    ctx.shadowBlur = 18;
     ctx.fillStyle = s.glow;
     ctx.beginPath();
     ctx.arc(x, y, orbR, 0, Math.PI * 2);
     ctx.fill();
+    ctx.shadowBlur = 0;
     ctx.font = `700 ${(s.combo ? 34 : 26) - f * 6}px "Noto Serif JP", serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -818,7 +1328,8 @@ export function drawCombat(ctx, c, time) {
   }
   drawParticles(ctx, c.particles);
   // Combo banner: the fused spell's name, big, when one triggers. It hangs
-  // near the top of the arena so it never hides the boss's face.
+  // at the top of the arena (y 122..194), clear of the boss's head, and
+  // float texts live in their own zone left of the boss, never under it.
   if (c.comboBanner && c.comboBanner.timer > 0) {
     const ban = c.comboBanner;
     const age = 1.8 - ban.timer;
@@ -826,34 +1337,60 @@ export function drawCombat(ctx, c, time) {
     const alpha = ban.timer < 0.5 ? ban.timer / 0.5 : 1;
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.translate(ARENA.x + ARENA.w / 2, ARENA.y + 66);
+    ctx.translate(ARENA.x + ARENA.w / 2, BANNER.cy);
     ctx.scale(scale, scale);
     ctx.fillStyle = 'rgba(26, 21, 18, 0.82)';
     ctx.beginPath();
-    ctx.roundRect(-215, -50, 430, 100, 14);
+    ctx.roundRect(-BANNER.w / 2, -BANNER.h / 2, BANNER.w, BANNER.h, 14);
     ctx.fill();
     ctx.strokeStyle = ban.combo.color;
     ctx.lineWidth = 3;
     ctx.stroke();
     ctx.fillStyle = ban.combo.glow;
-    ctx.font = '700 56px "Noto Serif JP", serif';
+    ctx.font = '700 48px "Noto Serif JP", serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(ban.combo.kanji, -150, 4);
+    ctx.fillText(ban.combo.kanji, -150, 2);
     ctx.fillStyle = '#fdf6e3';
-    ctx.font = '700 30px Georgia, serif';
+    ctx.font = '700 26px Georgia, serif';
     ctx.textAlign = 'left';
-    ctx.fillText(ban.combo.name.toUpperCase(), -105, -12);
-    ctx.font = 'italic 14px Georgia, serif';
+    ctx.fillText(ban.combo.name.toUpperCase(), -105, -10);
+    ctx.font = 'italic 13px Georgia, serif';
     ctx.fillStyle = '#d9c9a8';
-    ctx.fillText(ban.sub, -105, 16);
+    ctx.fillText(ban.sub, -105, 12);
     ctx.fillStyle = '#ffd43b';
-    ctx.font = '700 13px Georgia, serif';
-    ctx.fillText('FUSION COMBO!', -105, 38);
+    ctx.font = '700 12px Georgia, serif';
+    ctx.fillText('FUSION COMBO!', -105, 30);
     ctx.restore();
   }
   // Element wheel, bottom-left of the arena.
   drawWheel(ctx, ARENA.x + 62, ARENA.y + ARENA.h - 62, 34);
+  // INCOMING panel: who is in this fight — the boss and its minions.
+  {
+    const px = ARENA.x + 8, py = ARENA.y + ARENA.h - 200, pw = 184, ph = 68;
+    const minions = minionCount(c);
+    const spec = MINIONS[def.element];
+    ctx.fillStyle = 'rgba(43, 33, 24, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(px, py, pw, ph, 8);
+    ctx.fill();
+    ctx.fillStyle = '#ffd43b';
+    ctx.font = '700 11px Georgia, serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('INCOMING', px + 10, py + 16);
+    ctx.fillStyle = '#fdf6e3';
+    ctx.font = '700 13px Georgia, serif';
+    ctx.fillText(`● ${def.name}`, px + 10, py + 36);
+    ctx.fillStyle = '#d9c9a8';
+    ctx.font = '11px Georgia, serif';
+    ctx.fillText('BOSS', px + pw - 44, py + 36);
+    ctx.fillStyle = spec.color;
+    ctx.font = '700 13px Georgia, serif';
+    ctx.fillText(`● ${spec.name}`, px + 10, py + 56);
+    ctx.fillStyle = '#d9c9a8';
+    ctx.font = '11px Georgia, serif';
+    ctx.fillText(`x${minions}`, px + pw - 30, py + 56);
+  }
   // Player HP + ink, bottom-left bar.
   ctx.fillStyle = 'rgba(43, 33, 24, 0.85)';
   ctx.beginPath();
@@ -946,12 +1483,13 @@ export function drawCombat(ctx, c, time) {
     ctx.fillText(String(i + 1), PAD.x + fx * PAD.w - 8, PAD.y + fy * PAD.h - 6);
   });
   ctx.restore();
-  // Drawn strokes, in the player's equipped brush and ink.
+  // Drawn strokes: thick ink with the selected element's glow, so the
+  // drawing reads as the heart of the fight, not a side panel.
   for (const stroke of c.strokes) {
-    drawBrushStroke(ctx, stroke.map(([sx, sy]) => [PAD.x + sx, PAD.y + sy]));
+    drawBrushStroke(ctx, stroke.map(([sx, sy]) => [PAD.x + sx, PAD.y + sy]), null, 12, ghost.glow);
   }
   if (c.currentStroke) {
-    drawBrushStroke(ctx, c.currentStroke.map(([sx, sy]) => [PAD.x + sx, PAD.y + sy]));
+    drawBrushStroke(ctx, c.currentStroke.map(([sx, sy]) => [PAD.x + sx, PAD.y + sy]), null, 12, ghost.glow);
   }
   // Cast feedback, inside the pad's bottom edge.
   if (c.castFeedback) {

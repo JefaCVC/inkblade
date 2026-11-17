@@ -42,14 +42,27 @@ function stageFight(g, scrollIndex, opts) {
   // water+lightning = Storm Surge).
   combat.lastCast = { elementId: opts.lastCast, at: combat.time - 1.2 };
   spellBurst(combat.particles, b.x, b.y, opts.element, 1.2);
-  floatText(combat.particles, b.x, b.y - 80, '-42', ELEMENT_BY_ID[opts.element].color, 26);
+  // The float lives in the dedicated zone left of the boss, never under
+  // the fusion banner, right-aligned so it never touches the boss.
+  floatText(combat.particles, b.x - combat.boss.r - 12, b.y - 6, '-42', ELEMENT_BY_ID[opts.element].color, 26, 'right');
+  // Three minion spirits, so the INCOMING panel reads x3 and the arena
+  // shows the fight's full cast. Staged frozen with deep HP: the staged
+  // casts (a Firestorm splash, a lightning chain) would otherwise wipe
+  // them, and a drifting one can reach the player before the shutter.
+  const minionSpots = [[300, 250], [280, 390], [240, 320]];
+  for (const [mx, my] of minionSpots) {
+    combat.summons.push({
+      x: mx, y: my, vx: 0, vy: 0, r: 13, hp: 500, color: opts.summon, kind: 'minion',
+      age: 0, minion: true, name: 'Minion', still: true,
+    });
+  }
   if (opts.projectile) {
     combat.projectiles.push({
-      x: 420, y: 220, vx: -160, vy: 60, r: 10, color: opts.projectile, damage: 10, kind: 'orb', age: 0,
+      x: 340, y: 190, vx: -120, vy: 60, r: 10, color: opts.projectile, damage: 10, kind: 'orb', age: 0,
     });
   }
   if (opts.summon) {
-    combat.summons.push({ x: 380, y: 320, vx: 0, vy: 0, r: 13, hp: 12, color: opts.summon, kind: 'ember', age: 0 });
+    combat.summons.push({ x: 330, y: 380, vx: 0, vy: 0, r: 13, hp: 500, color: opts.summon, kind: 'ember', age: 0, still: true });
   }
   g.combat = combat;
   g.screen = 'combat';
@@ -82,7 +95,7 @@ export function stageShot(name, g) {
     g.lastResult = {
       scrollIndex: 0, seconds: 96, casts: 14, accuracy: 0.86, perfects: 5,
       maxCombo: 6, damage: 268, essence: 96, score: 1240, campaignComplete: false,
-      rankPoints: 210, rankUp: RANKS[1],
+      rankPoints: 210, rankUp: RANKS[1], grade: 'A',
     };
     g.screen = 'victory';
     return;

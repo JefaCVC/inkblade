@@ -14,7 +14,7 @@ import { chromium } from '/home/hatch/workspace/makefun/agentstrike-shots/node_m
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { ELEMENT_BY_ID, PAD } from '../game/src/config.js';
+import { ARENA, BANNER, ELEMENT_BY_ID, PAD, WINLOSE_STRIP } from '../game/src/config.js';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const BASE = 'http://localhost:8080';
@@ -22,7 +22,9 @@ const results = [];
 let failures = 0;
 
 function check(name, ok, detail = '') {
-  results.push(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
+  const line = `${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`;
+  results.push(line);
+  console.log(line);
   if (!ok) failures += 1;
 }
 
@@ -84,13 +86,33 @@ const screen1 = await page.evaluate(() => window.__inkblade.screen);
 const phase1 = await page.evaluate(() => window.__inkblade.combat?.phase);
 check('combat starts', screen1 === 'combat' && phase1 === 'fight', `screen=${screen1} phase=${phase1}`);
 
+// --- 2b. The fix round: big boss, minions, WIN/LOSE strip, bigger pad. ---
+const combatLayout = await page.evaluate(() => ({
+  bossR: window.__inkblade.combat.boss.r,
+  bossY: window.__inkblade.combat.boss.y,
+  minions: window.__inkblade.combat.summons.filter((s) => s.minion).length,
+}));
+check('boss is big and centre-frame', combatLayout.bossR >= 90, `r=${combatLayout.bossR}`);
+check('minions spawn with the fight', combatLayout.minions >= 2, `minions=${combatLayout.minions}`);
+check('ink pad is bigger', PAD.w >= 296 && PAD.h >= 288, `pad ${PAD.w}x${PAD.h}`);
+check('WIN/LOSE strip sits above the arena, clear of the pad',
+  WINLOSE_STRIP.y + WINLOSE_STRIP.h <= ARENA.y && WINLOSE_STRIP.x + WINLOSE_STRIP.w <= PAD.x,
+  `strip ${WINLOSE_STRIP.w}x${WINLOSE_STRIP.h} at y${WINLOSE_STRIP.y}, arena y${ARENA.y}`);
+check('fusion banner clears the boss head',
+  BANNER.cy + BANNER.h / 2 < combatLayout.bossY - combatLayout.bossR,
+  `banner bottom ${BANNER.cy + BANNER.h / 2}, boss top ${combatLayout.bossY - combatLayout.bossR}`);
+
 // Keep the painter safe while the test draws, and silence the boss's
 // attacks: taking a hit resets the combo chain, which would make the
 // combo test flaky. (The defeat section re-enables damage on purpose.)
+// The minions are cleared too — they drift into the painter and hit just
+// like a boss attack. Their spawn was already verified in section 2b.
 await page.evaluate(() => {
   const c = window.__inkblade.combat;
   c.player.hp = 1000;
   c.boss.attackTimer = 999;
+  c.summons = [];
+  c.minionTimer = 999;
 });
 const bossHpBefore = await page.evaluate(() => window.__inkblade.combat.boss.hp);
 
@@ -151,7 +173,24 @@ await page.evaluate(() => {
 await drawKanji(page, 'fire');
 await page.waitForTimeout(1100); // just past the 900ms auto-cast pause
 await drawKanji(page, 'wind');
-await page.waitForTimeout(1800);
+// --- 4d. Float texts never overlap the fusion banner: sample the live
+// float positions for 1.5s while the fusion lands and check every one
+// stays outside the banner rect.
+let floatsSeen = 0;
+let floatsClear = true;
+for (let i = 0; i < 15; i += 1) {
+  const sample = await page.evaluate(({ bx, by, bw, bh }) => {
+    const c = window.__inkblade.combat;
+    const inside = c.particles.texts.filter((t) =>
+      t.x > bx - bw / 2 && t.x < bx + bw / 2 && t.y > by - bh / 2 && t.y < by + bh / 2);
+    return { n: c.particles.texts.length, inside: inside.length };
+  }, { bx: ARENA.x + ARENA.w / 2, by: BANNER.cy, bw: BANNER.w, bh: BANNER.h });
+  floatsSeen = Math.max(floatsSeen, sample.n);
+  if (sample.inside > 0) floatsClear = false;
+  await page.waitForTimeout(100);
+}
+check('float texts never overlap the fusion banner', floatsClear && floatsSeen > 0, `floats seen=${floatsSeen} clear=${floatsClear}`);
+await page.waitForTimeout(800);
 const afterFusion = await page.evaluate(() => ({
   combos: window.__inkblade.combat.stats.combos,
   discovered: window.__inkblade.progress.combosDiscovered,
@@ -175,6 +214,7 @@ const screen2 = await page.evaluate(() => window.__inkblade.screen);
 check('victory screen reached', screen2 === 'victory', `screen=${screen2}`);
 const victoryResult = await page.evaluate(() => window.__inkblade.lastResult);
 check('victory stats recorded', victoryResult && victoryResult.damage > 0 && victoryResult.casts >= 2, JSON.stringify(victoryResult));
+check('fight grade awarded', victoryResult && ['S', 'A', 'B', 'C'].includes(victoryResult.grade), `grade=${victoryResult?.grade}`);
 const rankAfterFight = await page.evaluate(() => window.__inkblade.progress.rankPoints);
 check('rank points awarded', victoryResult.rankPoints > 0 && rankAfterFight >= victoryResult.rankPoints, `fight +${victoryResult.rankPoints}, total ${rankAfterFight}`);
 await clickButton(page, 726, 502); // SHOP
@@ -311,6 +351,5 @@ for (const shot of shots) {
 }
 
 await browser.close();
-console.log(results.join('\n'));
 console.log(failures === 0 ? `\nALL ${results.length} CHECKS PASSED` : `\n${failures} CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

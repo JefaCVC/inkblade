@@ -968,8 +968,10 @@ export function setBrushStyle(style, inkColor, rainbow = false) {
 // With no colour given it uses the player's equipped ink and brush style
 // (rank unlocks); the Master brush glows, Splatter throws ink drops.
 // Nijimi: ink bleeding into the paper — a wide, faint halo is laid under
-// the stroke first, so the line feels wet rather than printed.
-export function drawBrushStroke(ctx, points, color = null, maxWidth = null) {
+// the stroke first, so the line feels wet rather than printed. glowColor
+// (the combat pad passes the selected element's glow) adds a coloured
+// halo around the stroke so the live drawing reads from across the room.
+export function drawBrushStroke(ctx, points, color = null, maxWidth = null, glowColor = null) {
   if (points.length < 2) return;
   const style = equippedBrush;
   const width = maxWidth ?? style.width;
@@ -978,9 +980,9 @@ export function drawBrushStroke(ctx, points, color = null, maxWidth = null) {
     strokeColor = `hsl(${(performance.now() / 12) % 360}, 75%, 45%)`;
   }
   ctx.save();
-  if (color === null && style.glow) {
-    ctx.shadowColor = strokeColor;
-    ctx.shadowBlur = 10;
+  if ((color === null && style.glow) || glowColor) {
+    ctx.shadowColor = glowColor ?? strokeColor;
+    ctx.shadowBlur = glowColor ? 14 : 10;
   }
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';

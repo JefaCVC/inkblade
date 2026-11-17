@@ -4,10 +4,29 @@
 
 export const VIEW = { width: 1024, height: 576 };
 
-// The ink pad (casting box) on the right of the combat screen.
-export const PAD = { x: 712, y: 110, w: 288, h: 280 };
-// The arena where the painter and the boss fight, left of the pad.
-export const ARENA = { x: 24, y: 88, w: 664, h: 388 };
+// The ink pad (casting box) on the right of the combat screen. Wider and
+// taller than v1: the drawing must feel central, not a side panel.
+export const PAD = { x: 700, y: 104, w: 300, h: 292 };
+// The arena where the painter and the boss fight, left of the pad. It
+// starts below the WIN/LOSE strip (y 80..104) and keeps its old bottom edge.
+export const ARENA = { x: 24, y: 112, w: 664, h: 364 };
+
+// The WIN/LOSE strip between the boss plate and the arena, and the fusion
+// banner geometry — exported so the smoke test can prove float texts never
+// overlap the banner.
+export const WINLOSE_STRIP = { x: 24, y: 80, w: 664, h: 24 };
+export const BANNER = { w: 430, h: 72, cy: 158 }; // centred on the arena, y 122..194
+
+// Boss minions: small spirits per element that drift toward the painter.
+export const MINIONS = {
+  fire: { name: 'Ember Imp', color: '#ff922b' },
+  water: { name: 'Tide Wisp', color: '#4dabf7' },
+  wind: { name: 'Gale Mite', color: '#69db7c' },
+  lightning: { name: 'Spark Imp', color: '#ffd43b' },
+  earth: { name: 'Pebble Imp', color: '#d0a06a' },
+  light: { name: 'Dawn Mote', color: '#ffe066' },
+  dark: { name: 'Shade Wisp', color: '#b197fc' },
+};
 
 export const PLAYER = {
   maxHp: 100,

@@ -699,6 +699,22 @@ export function drawVictory(ctx, g, time) {
   ctx.fillStyle = '#2b2118';
   ctx.font = '15px Georgia, serif';
   ctx.fillText('The scroll is sealed in red. The story moves on.', 342, 330);
+  // The fight grade: a big coloured seal at the scroll's top-left corner.
+  const grade = v.grade || '—';
+  const gradeColors = { S: '#e67700', A: '#2b8a3e', B: '#1971c2', C: '#868e96' };
+  ctx.fillStyle = gradeColors[grade] || '#868e96';
+  ctx.beginPath();
+  ctx.arc(140, 168, 34, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fdf6e3';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.fillStyle = '#fdf6e3';
+  ctx.font = '700 36px Georgia, serif';
+  ctx.fillText(grade, 140, 181);
+  ctx.fillStyle = '#6b5a44';
+  ctx.font = '700 12px Georgia, serif';
+  ctx.fillText('GRADE', 140, 218);
   if (v.campaignComplete) {
     ctx.fillStyle = '#b02a1e';
     ctx.font = '700 20px Georgia, serif';
@@ -757,10 +773,11 @@ export function drawVictory(ctx, g, time) {
     ['Essence earned', `+${v.essence}`],
     ['Score', String(v.score)],
     ['Rank points', `+${v.rankPoints || 0}`],
+    ['Grade', v.grade || '—'],
   ];
   ctx.font = '15px Georgia, serif';
   stats.forEach(([label, value], i) => {
-    const y = 168 + i * 30;
+    const y = 168 + i * 27;
     ctx.fillStyle = '#d9c9a8';
     ctx.fillText(label, 676, y);
     ctx.fillStyle = '#fdf6e3';

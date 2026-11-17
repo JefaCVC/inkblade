@@ -74,8 +74,8 @@ export function spellBurst(particles, x, y, elementId, power = 1) {
   ring(particles, x, y, spec.colors[0], 70 + 40 * power);
 }
 
-export function floatText(particles, x, y, text, color = '#2b2118', size = 22) {
-  particles.texts.push({ x, y, text, color, size, life: 1.1, age: 0 });
+export function floatText(particles, x, y, text, color = '#2b2118', size = 22, align = 'center') {
+  particles.texts.push({ x, y, text, color, size, life: 1.1, age: 0, align });
   if (particles.texts.length > 24) particles.texts.splice(0, particles.texts.length - 24);
 }
 
@@ -212,7 +212,7 @@ export function drawParticles(ctx, particles) {
     const a = t.age < 0.7 ? 1 : 1 - (t.age - 0.7) / 0.4;
     ctx.globalAlpha = Math.max(0, a);
     ctx.font = `700 ${t.size}px Georgia, serif`;
-    ctx.textAlign = 'center';
+    ctx.textAlign = t.align || 'center';
     ctx.lineWidth = 4;
     ctx.strokeStyle = 'rgba(250, 244, 230, 0.9)';
     ctx.strokeText(t.text, t.x, t.y);

@@ -4,7 +4,7 @@
 // finished fight in the leaderboard, the history and the codex.
 
 import { BOSSES, ELEMENTS, UPGRADES, VIEW } from './config.js';
-import { createCombat, updateCombat, drawCombat, combatMouseDown, combatMouseMove, combatMouseUp, combatKey } from './combat.js';
+import { createCombat, updateCombat, drawCombat, combatMouseDown, combatMouseMove, combatMouseUp, combatKey, fightGrade } from './combat.js';
 import {
   drawMenu, drawScrolls, drawShop, drawDojo, drawCodex, drawLeaderboard,
   drawHistory, drawVictory, drawDefeat, drawPause, drawHelp, drawCombos,
@@ -153,7 +153,7 @@ function finishFight(won) {
     perfects: c.stats.perfects, maxCombo: c.stats.maxCombo, damage: c.stats.damage,
     essence: won ? c.essenceEarned : 0, score: fightScore,
     campaignComplete: won && c.scrollIndex === 6,
-    rankPoints, rankUp,
+    rankPoints, rankUp, grade: fightGrade(c),
   };
   setScreen(won ? 'victory' : 'defeat');
 }
